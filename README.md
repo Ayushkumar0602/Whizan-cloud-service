@@ -1,159 +1,81 @@
-# Turborepo starter
+# Whizan Cloud Service ☁️
 
-This Turborepo starter is maintained by the Turborepo core team.
+**Whizan Cloud Service** is a modern, Vercel-like Platform-as-a-Service (PaaS) that allows developers to deploy full-stack web applications and static sites with zero configuration. It automatically builds code from GitHub, packages it into Docker containers, and serves it globally with advanced features like **scale-to-zero**, **instant cold starts**, and **WebSocket proxying**.
 
-## Using this example
+---
 
-Run the following command:
+## 🌟 Key Features
 
-```sh
-npx create-turbo@latest
-```
+- **Zero-Config Builds:** Automatically detects and builds your framework (Next.js, React, Node.js, etc.) using Cloud Native Buildpacks (`pack`), just like Heroku and Vercel.
+- **Scale-to-Zero (Serverless):** Inactive applications are automatically put to sleep to conserve server resources.
+- **Instant Cold Starts:** When an asleep app receives traffic, the Edge Router displays a beautiful, auto-refreshing "Waking up..." screen while spinning up the container in the background.
+- **Real-Time Log Streaming:** View your application's build and deployment logs live in the dashboard, powered by Redis Pub/Sub.
+- **WebSocket & Real-Time Support:** Fully supports `wss://` traffic for Next.js HMR, Socket.io, and multiplayer games—even during cold starts.
+- **Dynamic Edge Router:** A custom `http-proxy` based router that resolves subdomains (e.g., `my-app.whizan.com`) to the correct internal Docker containers.
 
-## What's inside?
+## 🏗️ Architecture
 
-This Turborepo includes the following packages/apps:
+This project is structured as a **Turborepo** monorepo containing several microservices:
 
-### Apps and Packages
+### Apps
+1. **`dashboard`** (Next.js): The user-facing frontend where developers can manage projects, trigger deployments, and view logs.
+2. **`api`** (Express): The core REST API that manages the PostgreSQL database (via Prisma) and orchestrates deployments.
+3. **`build-worker`** (Node.js/BullMQ): A background worker that pulls code from GitHub, builds Docker images, and runs the containers.
+4. **`edge-router`** (Node.js/HTTP-Proxy): The primary entry point for all web traffic. It dynamically routes subdomains to internal Docker ports and manages scale-to-zero wakeups.
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `@next/eslint-plugin-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+### Infrastructure
+- **PostgreSQL**: Primary data store for Users, Projects, and Deployments.
+- **Redis**: Used for BullMQ job queues, live log streaming (Pub/Sub), and cold-start wakeup signaling.
+- **Docker**: Containerizes and runs user applications securely.
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+## 🚀 Getting Started
 
-### Utilities
+### Prerequisites
+- Node.js (v18+)
+- Docker & Docker Compose
+- Pack CLI (for buildpacks)
+- Git
 
-This Turborepo has some additional tools already setup for you:
+### Installation
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+1. **Clone the repository:**
+   ```sh
+   git clone https://github.com/Ayushkumar0602/Whizan-cloud-service.git
+   cd Whizan-cloud-service
+   ```
 
-### Build
+2. **Install dependencies:**
+   ```sh
+   npm install
+   ```
 
-To build all apps and packages, run the following command:
+3. **Set up Environment Variables:**
+   Copy `.env.example` to `.env` in the root and configure your database/Redis credentials.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+4. **Start Infrastructure (PostgreSQL & Redis):**
+   ```sh
+   docker-compose up -d
+   ```
 
-```sh
-cd my-turborepo
-turbo build
-```
+5. **Run Database Migrations:**
+   ```sh
+   npm run db:push
+   ```
 
-Without global `turbo`, use your package manager:
+6. **Start the Platform:**
+   Start all microservices (Dashboard, API, Worker, Edge Router) simultaneously using Turborepo:
+   ```sh
+   npm start
+   ```
 
-```sh
-cd my-turborepo
-npx turbo build
-npm exec turbo build
-npm exec turbo build
-```
+## 🌐 How Traffic Flows
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+1. A user visits `https://my-project.whizan.com`.
+2. The **Edge Router** intercepts the request and queries Redis/DB for `my-project`.
+3. If the container is **Active**, the router seamlessly proxies the HTTP/WebSocket traffic to the internal Docker port.
+4. If the container is **Asleep**, the router instantly returns a beautiful "Waking up..." HTML screen (or a 503 for WebSockets to trigger client retries). It then fires a `wakeup` event to Redis.
+5. The **Build Worker** receives the wakeup event, issues a `docker start`, and updates the active port.
+6. The user's browser (via the loading screen's background ping) detects the container is ready and automatically refreshes into the app!
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo build --filter=docs
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo build --filter=docs
-npm exec turbo build --filter=docs
-npm exec turbo build --filter=docs
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo dev
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo dev
-npm exec turbo dev
-npm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-npm exec turbo dev --filter=web
-npm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-npm exec turbo login
-npm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-npm exec turbo link
-npm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+## 📜 License
+MIT License
