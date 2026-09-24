@@ -1,0 +1,160 @@
+// This is your Prisma schema file.
+// Run: npm run db:generate to generate the client
+// Run: npm run db:migrate to apply migrations
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+//  USERS
+// ─────────────────────────────────────────
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String?   @map("password_hash")   // null for GitHub-only users
+  githubId     String?   @unique @map("github_id")
+  githubToken  String?   @map("github_token")     // encrypted
+  name         String?
+  avatarUrl    String?   @map("avatar_url")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  projects     Project[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────
+//  REFRESH TOKENS
+// ─────────────────────────────────────────
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────────────────────
+//  PROJECTS
+// ─────────────────────────────────────────
+model Project {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  name           String
+  slug           String    @unique   // used for <slug>.localhost subdomain
+  githubRepoUrl  String    @map("github_repo_url")
+  githubRepoId   String?   @map("github_repo_id")
+  webhookSecret  String    @map("webhook_secret")  // HMAC secret for this project
+  branch         String    @default("main")
+  buildCommand   String    @default("npm run build") @map("build_command")
+  installCommand String    @default("npm install") @map("install_command")
+  outputDir      String    @default(".next") @map("output_dir")
+  framework      Framework @default(NEXTJS)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deployments    Deployment[]
+  envVariables   EnvVariable[]
+  customDomains  CustomDomain[]
+
+  @@map("projects")
+}
+
+enum Framework {
+  NEXTJS
+  REACT
+  VITE
+  ASTRO
+  CUSTOM
+
+  @@map("framework")
+}
+
+// ─────────────────────────────────────────
+//  DEPLOYMENTS
+// ─────────────────────────────────────────
+model Deployment {
+  id               String           @id @default(uuid())
+  projectId        String           @map("project_id")
+  commitHash       String           @map("commit_hash")
+  commitMessage    String?          @map("commit_message")
+  branch           String
+  status           DeploymentStatus @default(QUEUED)
+  deploymentType   DeploymentType?  @map("deployment_type")
+  url              String?          // e.g. my-app.localhost
+  containerPort    Int?             @map("container_port")  // for SSR/hybrid apps
+  buildStartedAt   DateTime?        @map("build_started_at")
+  buildFinishedAt  DateTime?        @map("build_finished_at")
+  errorMessage     String?          @map("error_message")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@map("deployments")
+}
+
+enum DeploymentStatus {
+  QUEUED
+  BUILDING
+  READY
+  FAILED
+  CANCELLED
+  PAUSED
+
+  @@map("deployment_status")
+}
+
+enum DeploymentType {
+  STATIC
+  SSR
+  HYBRID
+
+  @@map("deployment_type")
+}
+
+// ─────────────────────────────────────────
+//  ENV VARIABLES (ENCRYPTED)
+// ─────────────────────────────────────────
+model EnvVariable {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  key       String
+  value     String   // AES-256-GCM encrypted ciphertext
+  isSecret  Boolean  @default(true) @map("is_secret")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, key])
+  @@map("env_variables")
+}
+
+// ─────────────────────────────────────────
+//  CUSTOM DOMAINS
+// ─────────────────────────────────────────
+model CustomDomain {
+  id        String    @id @default(uuid())
+  projectId String    @map("project_id")
+  domain    String    @unique
+  verified  Boolean   @default(false)
+  sslStatus String    @default("pending") @map("ssl_status")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("custom_domains")
+}

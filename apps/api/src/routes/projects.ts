@@ -1,0 +1,109 @@
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { prisma } from "../lib/prisma.js";
+import { generateWebhookSecret } from "../lib/crypto.js";
+import { redisClient } from "../lib/redis.js";
+import { stopDeploymentContainer, deleteBuildDir } from "../lib/resource-cleaner.js";
+
+const CreateProjectSchema = z.object({
+  name: z.string().min(1).max(60),
+  slug: z.string().min(1).max(60).regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
+  githubRepoUrl: z.string().url(),
+  branch: z.string().default("main"),
+  buildCommand: z.string().default("npm run build"),
+  installCommand: z.string().default("npm install"),
+  outputDir: z.string().default(".next"),
+  framework: z.enum(["NEXTJS", "REACT", "VITE", "ASTRO", "CUSTOM"]).default("NEXTJS"),
+});
+
+const UpdateProjectSchema = CreateProjectSchema.partial().omit({ slug: true });
+
+export async function projectRoutes(fastify: FastifyInstance) {
+  fastify.addHook("preHandler", fastify.authenticate);
+
+  // GET /api/projects
+  fastify.get("/", async (request) => {
+    const { userId } = request.user;
+    return prisma.project.findMany({
+      where: { userId },
+      include: { deployments: { orderBy: { createdAt: "desc" }, take: 1 } },
+      orderBy: { createdAt: "desc" },
+    });
+  });
+
+  // POST /api/projects
+  fastify.post("/", async (request, reply) => {
+    const body = CreateProjectSchema.safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: body.error.flatten() });
+
+    const { userId } = request.user;
+    const slugTaken = await prisma.project.findUnique({ where: { slug: body.data.slug } });
+    if (slugTaken) return reply.code(409).send({ error: "Slug already taken" });
+
+    const project = await prisma.project.create({
+      data: { ...body.data, userId, webhookSecret: generateWebhookSecret() },
+    });
+    return reply.code(201).send(project);
+  });
+
+  // GET /api/projects/:id
+  fastify.get("/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { userId } = request.user;
+    const project = await prisma.project.findFirst({
+      where: { id, userId },
+      include: { deployments: { orderBy: { createdAt: "desc" }, take: 10 } },
+    });
+    if (!project) return reply.code(404).send({ error: "Project not found" });
+    return project;
+  });
+
+  // PATCH /api/projects/:id
+  fastify.patch("/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { userId } = request.user;
+    const body = UpdateProjectSchema.safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: body.error.flatten() });
+    const project = await prisma.project.findFirst({ where: { id, userId } });
+    if (!project) return reply.code(404).send({ error: "Project not found" });
+    return prisma.project.update({ where: { id }, data: body.data });
+  });
+
+  // DELETE /api/projects/:id — Full cascade: containers + files + Redis + DB
+  fastify.delete("/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { userId } = request.user;
+
+    const project = await prisma.project.findFirst({
+      where: { id, userId },
+      include: { deployments: true },
+    });
+    if (!project) return reply.code(404).send({ error: "Project not found" });
+
+    // 1. Stop all SSR containers + wipe build dirs + clear Redis keys
+    await Promise.all(
+      project.deployments.map(async (d) => {
+        await Promise.all([
+          stopDeploymentContainer(d.id),
+          deleteBuildDir(d.id),
+          redisClient.del(`build-logs:${d.id}`),
+          // Cancel any in-progress build jobs
+          ...(["QUEUED", "BUILDING"].includes(d.status)
+            ? [
+                redisClient.publish(`cancel:${d.id}`, "CANCEL"),
+                redisClient.publish(`logs:${d.id}`, "__DONE__"),
+              ]
+            : []),
+        ]);
+      })
+    );
+
+    // 2. Remove edge router entry
+    await redisClient.del(`deployment:${project.slug}`);
+
+    // 3. Cascade delete: env vars + deployments + project
+    await prisma.project.delete({ where: { id } });
+
+    return reply.send({ ok: true });
+  });
+}

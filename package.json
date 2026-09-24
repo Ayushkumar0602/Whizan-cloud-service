@@ -1,0 +1,36 @@
+{
+  "name": "hostify",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:api": "turbo run dev --filter=api",
+    "dev:dashboard": "turbo run dev --filter=dashboard",
+    "dev:worker": "turbo run dev --filter=build-worker",
+    "dev:router": "turbo run dev --filter=edge-router",
+    "start": "concurrently -n api,worker,router,dashboard -c cyan,green,yellow,magenta \"cd apps/api && npx tsx watch --env-file=../../.env src/index.ts\" \"cd apps/build-worker && npx tsx watch --env-file=../../.env src/worker.ts\" \"cd apps/edge-router && npx tsx watch --env-file=../../.env src/index.ts\" \"cd apps/dashboard && npx next dev\"",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "db:push": "prisma db push --schema packages/db/prisma/schema.prisma",
+    "db:generate": "prisma generate --schema packages/db/prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema packages/db/prisma/schema.prisma",
+    "db:studio": "prisma studio --schema packages/db/prisma/schema.prisma",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "check-types": "turbo run check-types"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "prettier": "^3.3.3",
+    "turbo": "^2.11.3",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "packageManager": "npm@11.6.0"
+}

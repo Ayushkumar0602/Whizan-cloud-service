@@ -1,0 +1,26 @@
+{
+  "name": "edge-router",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "finalhandler": "^1.2.0",
+    "http-proxy": "^1.18.1",
+    "ioredis": "^5.4.1",
+    "serve-static": "^1.15.0"
+  },
+  "devDependencies": {
+    "@types/finalhandler": "^1.2.3",
+    "@types/http-proxy": "^1.17.15",
+    "@types/node": "^20.16.5",
+    "@types/serve-static": "^1.15.7",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4"
+  }
+}
