@@ -240,20 +240,50 @@ const worker = new Worker<BuildJob>(
 
       await log(wasCancelled ? "⚡ Deployment cancelled by user" : `✗ Build failed: ${msg}`);
       await publishLog(redisPub, deploymentId, "__DONE__");
-      await markFailed(wasCancelled ? "Cancelled by user" : msg);
 
-      // Clean up build dir on failure / cancellation (no app to serve)
-      if (!isResume) {
+      if (isResume) {
+        // ── Wakeup job failed (e.g. container wouldn't start) ──────────────
+        // CRITICAL: Do NOT mark as FAILED. The build artifacts on disk are
+        // still valid. Reset back to READY so the wakeup handler can try again
+        // on the next user request. Also clear the containerPort from Redis
+        // so the edge router knows the app is asleep.
+        console.warn(`[Worker] Wakeup failed for ${deploymentId} — resetting to READY so retry is possible. Reason: ${msg}`);
+        await prisma.deployment.update({
+          where: { id: deploymentId },
+          data: { status: "READY", containerPort: null },
+        }).catch(() => {});
+        // Clear containerPort from the edge router's Redis key
+        const routerKey = `deployment:${slug}`;
+        const raw = await redisPub.get(routerKey);
+        if (raw) {
+          try {
+            const info = JSON.parse(raw);
+            delete info.containerPort;
+            await redisPub.set(routerKey, JSON.stringify(info));
+          } catch { }
+        }
+        // Do NOT re-throw — BullMQ should not mark this as a failed job
+        // (the deployment isn't actually broken, just temporarily un-startable)
+      } else {
+        // Fresh build failure — mark as FAILED normally
+        await markFailed(wasCancelled ? "Cancelled by user" : msg);
+        // Clean up build dir on failure / cancellation (no app to serve)
         await fs.rm(buildDir, { recursive: true, force: true }).catch(() => {});
-      }
-
-      if (!wasCancelled) {
-        throw err; // Re-throw so BullMQ marks job as failed
+        if (!wasCancelled) {
+          throw err; // Re-throw so BullMQ marks job as failed
+        }
       }
     } finally {
       // Always unsubscribe from cancel channel to free Redis resources
       redisSub.off("message", onCancelMessage);
       await redisSub.unsubscribe(cancelChannel).catch(() => {});
+
+      // Always clear the wakeup lock so the next user request can immediately
+      // retry — regardless of whether the wakeup succeeded or failed.
+      // Also remove the BullMQ jobId so deduplication doesn't block retries.
+      if (isResume) {
+        await redisPub.del(`wakeup-lock:${deploymentId}`).catch(() => {});
+      }
     }
   },
   {
@@ -290,9 +320,21 @@ redisSub2.on("message", async (channel, message) => {
     include: { project: true },
   });
 
-  if (!d || (d.status !== "READY" && d.status !== "PAUSED")) {
+  if (!d || (d.status !== "READY" && d.status !== "PAUSED" && d.status !== "FAILED")) {
     console.log(`[Scaler] Wakeup ignored for ${dId} — status: ${d?.status ?? "not found"}`);
     return;
+  }
+
+  // If FAILED, only allow wakeup if build artifacts still exist on disk
+  // (a container-start failure leaves artifacts intact; a build failure does not)
+  if (d.status === "FAILED") {
+    const buildDir = path.join(BUILD_BASE_DIR, d.id);
+    const artifactsExist = await fs.access(buildDir).then(() => true).catch(() => false);
+    if (!artifactsExist) {
+      console.log(`[Scaler] Wakeup ignored for ${dId} — FAILED with no build artifacts on disk`);
+      return;
+    }
+    console.log(`[Scaler] Wakeup of FAILED deployment ${dId} — build artifacts exist, retrying container start`);
   }
 
   // ── Guard 2: BullMQ jobId deduplication ──────────────────────────────────
