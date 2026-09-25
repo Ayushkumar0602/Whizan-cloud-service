@@ -19,7 +19,6 @@ export const adminRoutes = async function (fastify: FastifyInstance) {
     const deploymentsCount = await prisma.deployment.count();
 
     const activeDeployments = await prisma.deployment.findMany({
-      where: { status: "READY" },
       orderBy: { createdAt: "desc" },
       include: { project: true }
     });

@@ -94,11 +94,11 @@ export default function AdminPage() {
       </div>
 
       <div>
-        <h2 className="section-title">Active Azure Containers</h2>
+        <h2 className="section-title">All Azure Deployments</h2>
         <div className="card" style={{ overflow: "hidden" }}>
           {stats?.activeDeployments?.length === 0 ? (
             <div style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>
-              No active containers running on Azure.
+              No deployments exist on Azure.
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column" }}>
