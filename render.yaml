@@ -9,7 +9,7 @@ services:
     name: whizan-api
     runtime: node
     rootDir: apps/api
-    buildCommand: npm install && npm run build
+    buildCommand: cd ../../ && npm install && cd packages/db && npx prisma generate && cd ../../apps/api && npm run build
     startCommand: node dist/index.js
     plan: free
     healthCheckPath: /health
@@ -37,19 +37,5 @@ services:
       - key: DASHBOARD_URL
         sync: false # e.g. https://whizan-dashboard.onrender.com
 
-  # ─── Dashboard (Next.js) ────────────────────────────────────────────────────
-  - type: web
-    name: whizan-dashboard
-    runtime: node
-    rootDir: apps/dashboard
-    buildCommand: npm install && npm run build
-    startCommand: npm start
-    plan: free
-    healthCheckPath: /
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: NEXT_PUBLIC_API_URL
-        sync: false # e.g. https://whizan-api.onrender.com
-      - key: PORT
-        value: "10000"
+# NOTE: Dashboard is deployed on Vercel (not Render).
+# See: https://vercel.com — connect repo, set Root Directory = apps/dashboard

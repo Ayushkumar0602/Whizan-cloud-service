@@ -17,6 +17,7 @@
     "@fastify/rate-limit": "^9.1.0",
     "@hostify/db": "*",
     "@prisma/client": "^5.19.1",
+    "@types/bcryptjs": "^2.4.6",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.13.2",
     "dotenv": "^16.4.5",
@@ -30,9 +31,11 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/dockerode": "^3.3.31",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.16.5",
     "@types/uuid": "^10.0.0",
+    "dockerode": "^4.0.2",
     "tsx": "^4.19.0",
     "typescript": "^5.5.4"
   }

@@ -82,7 +82,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
 
     // 1. Stop all SSR containers + wipe build dirs + clear Redis keys
     await Promise.all(
-      project.deployments.map(async (d) => {
+      project.deployments.map(async (d: typeof project.deployments[number]) => {
         await Promise.all([
           stopDeploymentContainer(d.id),
           deleteBuildDir(d.id),

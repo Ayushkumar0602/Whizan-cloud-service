@@ -1,25 +1,24 @@
-import Docker from "dockerode";
 import fs from "fs/promises";
 import path from "path";
 
-const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 const BUILD_BASE_DIR = process.env.BUILD_BASE_DIR ?? "/tmp/hostify-builds";
 
 /**
  * Stops & removes the Docker container for a given deployment (if any).
+ * Uses a dynamic import so this module compiles cleanly on environments
+ * where Docker is not available (e.g. Render API server).
  * Safe to call even if the container is already gone.
  */
 export async function stopDeploymentContainer(deploymentId: string): Promise<void> {
   try {
-    const containers = await docker.listContainers({ all: true });
-    // Identify containers mounted to this deployment's build directory.
-    // We use .includes(deploymentId) because Docker Desktop on Mac prefixes mount paths with /host_mnt/private/...
-    const matches = containers.filter((c) =>
-      c.Mounts?.some((m) => m.Source?.includes(deploymentId))
+    const Docker = (await import("dockerode")).default;
+    const docker = new Docker({ socketPath: "/var/run/docker.sock" });
+    const containers: any[] = await docker.listContainers({ all: true });
+    const matches = containers.filter((c: any) =>
+      c.Mounts?.some((m: any) => m.Source?.includes(deploymentId))
     );
-
     await Promise.all(
-      matches.map(async (info) => {
+      matches.map(async (info: any) => {
         try {
           const container = docker.getContainer(info.Id);
           if (info.State === "running") await container.stop({ t: 5 });
@@ -30,7 +29,7 @@ export async function stopDeploymentContainer(deploymentId: string): Promise<voi
       })
     );
   } catch {
-    // Docker unavailable — ignore
+    // Docker unavailable on this host — ignore (API doesn't manage Docker directly)
   }
 }
 

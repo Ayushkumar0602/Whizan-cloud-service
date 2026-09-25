@@ -22,8 +22,7 @@ export async function envRoutes(fastify: FastifyInstance) {
 
     const vars = await prisma.envVariable.findMany({ where: { projectId: id } });
 
-    // Never return plaintext values — mask secrets
-    return vars.map((v) => ({
+    return vars.map((v: typeof vars[number]) => ({
       id: v.id,
       key: v.key,
       value: v.isSecret ? "***" : decrypt(v.value),
