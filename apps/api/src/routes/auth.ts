@@ -48,8 +48,8 @@ async function issueTokens(
 
   reply.setCookie(COOKIE_NAME, refreshToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: true, // Must be true for sameSite none
+    sameSite: "none", // Required for cross-domain cookies (Vercel frontend -> Render API)
     path: "/",
     maxAge: REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60,
   });
