@@ -9,6 +9,7 @@ import { AppRunner } from "./app-runner.js";
 import { publishLog } from "./log-streamer.js";
 import path from "path";
 import fs from "fs/promises";
+import os from "os";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -349,6 +350,80 @@ const scalerInterval = setInterval(async () => {
   }
 }, 60 * 1000);
 
+
+// ─── VM Health Stats Reporter ────────────────────────────────────────────────
+
+const statsInterval = setInterval(async () => {
+  try {
+    const cpus = os.cpus();
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
+
+    // CPU usage averaged across all cores
+    const cpuUsage = cpus.reduce((acc, cpu) => {
+      const total = Object.values(cpu.times).reduce((a, b) => a + b, 0);
+      const idle = cpu.times.idle;
+      return acc + ((total - idle) / total) * 100;
+    }, 0) / cpus.length;
+
+    // Docker container stats
+    let dockerContainers: any[] = [];
+    try {
+      const Docker = (await import("dockerode")).default;
+      const docker = new Docker({ socketPath: "/var/run/docker.sock" });
+      const containers = await docker.listContainers({ all: true });
+      dockerContainers = containers.map((c) => ({
+        id: c.Id.slice(0, 12),
+        name: c.Names?.[0]?.replace(/^\//, "") ?? "unknown",
+        image: c.Image,
+        state: c.State,
+        status: c.Status,
+        created: c.Created,
+        ports: c.Ports?.map((p) => `${p.PublicPort || "?"}:${p.PrivatePort}`).filter(Boolean),
+      }));
+    } catch {}
+
+    // BullMQ queue stats
+    let queueStats = { waiting: 0, active: 0, completed: 0, failed: 0 };
+    try {
+      queueStats = {
+        waiting: await buildQueue.getWaitingCount(),
+        active: await buildQueue.getActiveCount(),
+        completed: await buildQueue.getCompletedCount(),
+        failed: await buildQueue.getFailedCount(),
+      };
+    } catch {}
+
+    const stats = {
+      timestamp: Date.now(),
+      hostname: os.hostname(),
+      platform: os.platform(),
+      uptime: os.uptime(),
+      cpu: {
+        cores: cpus.length,
+        model: cpus[0]?.model ?? "unknown",
+        usagePercent: Math.round(cpuUsage * 10) / 10,
+      },
+      memory: {
+        totalMB: Math.round(totalMem / 1024 / 1024),
+        usedMB: Math.round(usedMem / 1024 / 1024),
+        freeMB: Math.round(freeMem / 1024 / 1024),
+        usagePercent: Math.round((usedMem / totalMem) * 1000) / 10,
+      },
+      docker: {
+        containers: dockerContainers,
+        totalContainers: dockerContainers.length,
+        runningContainers: dockerContainers.filter((c) => c.state === "running").length,
+      },
+      queue: queueStats,
+    };
+
+    await redisPub.set("vm:stats", JSON.stringify(stats), "EX", 60);
+  } catch (err) {
+    console.error("[Stats] Error publishing stats:", err);
+  }
+}, 15_000);
 
 // ─── Startup ─────────────────────────────────────────────────────────────────
 

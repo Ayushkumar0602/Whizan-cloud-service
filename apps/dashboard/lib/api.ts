@@ -242,7 +242,7 @@ export type CreateProjectData = {
 // ─── Admin ─────────────────────────────────────────────────────────────────
 
 export const admin = {
-  stats: () => request<{ users: number, projects: number, deployments: number, activeDeployments: ProjectWithLatestDeploy[] }>("/api/admin/stats"),
+  stats: () => request<any>("/api/admin/stats"),
   stopContainer: (deploymentId: string) => request(`/api/admin/deployments/${deploymentId}/stop`, { method: "POST" }),
   deleteDeployment: (deploymentId: string) => request(`/api/admin/deployments/${deploymentId}`, { method: "DELETE" }),
 };
