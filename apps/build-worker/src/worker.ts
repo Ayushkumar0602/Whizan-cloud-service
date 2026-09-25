@@ -20,8 +20,11 @@ const BUILD_BASE_DIR = process.env.BUILD_BASE_DIR ?? "/tmp/hostify-builds";
 // redisPub: used for publishing logs + cancel signals
 const redisPub = new Redis(REDIS_URL, { maxRetriesPerRequest: null, enableReadyCheck: false });
 
-// redisSub: dedicated subscriber connection (ioredis requirement)
+// redisSub: dedicated subscriber for per-deployment cancel channels
 const redisSub = new Redis(REDIS_URL, { maxRetriesPerRequest: null, enableReadyCheck: false });
+
+// redisSub2: dedicated subscriber for global wakeup events (separate to avoid message routing conflicts)
+const redisSub2 = new Redis(REDIS_URL, { maxRetriesPerRequest: null, enableReadyCheck: false });
 
 const prisma = new PrismaClient();
 
@@ -243,32 +246,55 @@ worker.on("failed", (job, err) => {
 
 // ─── Scale-to-Zero Idle Scaler & Wakeup ──────────────────────────────────────
 
-// 1. Listen for wakeups from Edge Router
-redisSub.subscribe("wakeup").catch(() => {});
-redisSub.on("message", async (channel, message) => {
-  if (channel === "wakeup") {
-    const dId = message;
-    const d = await prisma.deployment.findUnique({
-      where: { id: dId },
-      include: { project: true }
-    });
-    // If it's already READY, it just needs its container started
-    if (d && (d.status === "READY" || d.status === "PAUSED")) {
-      console.log(`[Scaler] Triggering cold-start for ${d.id}`);
-      await buildQueue.add("build", {
-        deploymentId: d.id,
-        projectId: d.projectId,
-        repoUrl: d.project.githubRepoUrl,
-        branch: d.project.branch,
-        buildCommand: d.project.buildCommand,
-        installCommand: d.project.installCommand,
-        outputDir: d.project.outputDir,
-        framework: d.project.framework,
-        slug: d.project.slug,
-        isResume: true,
-      });
-    }
+// 1. Listen for wakeups from Edge Router (on a dedicated connection to avoid conflicts with cancel channels)
+redisSub2.subscribe("wakeup").catch(() => {});
+redisSub2.on("message", async (channel, message) => {
+  if (channel !== "wakeup") return;
+
+  const dId = message;
+
+  // ── Guard 1: DB status check ─────────────────────────────────────────────
+  // Only wake up deployments that are READY (live but asleep) or PAUSED.
+  // If status is BUILDING, a wakeup job is already in-flight — do nothing.
+  const d = await prisma.deployment.findUnique({
+    where: { id: dId },
+    include: { project: true },
+  });
+
+  if (!d || (d.status !== "READY" && d.status !== "PAUSED")) {
+    console.log(`[Scaler] Wakeup ignored for ${dId} — status: ${d?.status ?? "not found"}`);
+    return;
   }
+
+  // ── Guard 2: BullMQ jobId deduplication ──────────────────────────────────
+  // Using a deterministic jobId means BullMQ silently discards any duplicate
+  // add() calls for a deployment that already has a wakeup job queued/active.
+  // This is the primary defense against the Thundering Herd: 50 concurrent
+  // publish("wakeup") calls → 50 add() calls → only 1 job ever created.
+  const jobId = `wakeup:${dId}`;
+  console.log(`[Scaler] Triggering cold-start for ${d.id} (jobId: ${jobId})`);
+
+  await buildQueue.add(
+    "build",
+    {
+      deploymentId: d.id,
+      projectId: d.projectId,
+      repoUrl: d.project.githubRepoUrl,
+      branch: d.project.branch,
+      buildCommand: d.project.buildCommand,
+      installCommand: d.project.installCommand,
+      outputDir: d.project.outputDir,
+      framework: d.project.framework,
+      slug: d.project.slug,
+      isResume: true,
+    },
+    {
+      jobId, // ← The key: BullMQ will reject duplicates with the same jobId
+      // Do not retry wakeup jobs — if the container fails to start, the
+      // next user request will trigger a fresh wakeup attempt anyway.
+      attempts: 1,
+    }
+  );
 });
 
 // 2. Idle Scaler (Checks every minute)
@@ -334,6 +360,7 @@ async function shutdown(): Promise<void> {
   await worker.close();
   await redisPub.quit();
   await redisSub.quit();
+  await redisSub2.quit();
   await prisma.$disconnect();
   process.exit(0);
 }
