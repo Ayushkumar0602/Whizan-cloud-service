@@ -1,3 +1,4 @@
+import "dotenv/config";
 import http from "http";
 import httpProxy from "http-proxy";
 import serveStatic from "serve-static";
