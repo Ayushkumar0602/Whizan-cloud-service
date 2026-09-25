@@ -5,19 +5,9 @@ const LOG_LIST_KEY = (deploymentId: string) => `build-logs:${deploymentId}`;
 const LOG_CHANNEL = (deploymentId: string) => `logs:${deploymentId}`;
 
 /**
- * Maximum number of log lines to retain per deployment.
- * If a build emits more than this (e.g. 100k npm deprecation warnings),
- * the oldest lines are silently dropped to prevent Redis OOM.
- */
-const MAX_LOG_LINES = 2000;
-
-/**
  * Publishes a log line to Redis:
  *  1. Appends to a Redis list (for replay if user opens logs late)
- *  2. Trims the list to MAX_LOG_LINES (anti-OOM guard)
- *  3. Publishes to Pub/Sub channel (for real-time streaming)
- *
- * All three operations run in a single pipeline — no extra round trips.
+ *  2. Publishes to Pub/Sub channel (for real-time streaming)
  */
 export async function publishLog(
   redis: Redis,
@@ -27,13 +17,9 @@ export async function publishLog(
   const listKey = LOG_LIST_KEY(deploymentId);
   const channel = LOG_CHANNEL(deploymentId);
 
-  // Pipeline: rpush + ltrim + expire in one round trip
-  await redis
-    .pipeline()
-    .rpush(listKey, line)
-    .ltrim(listKey, -MAX_LOG_LINES, -1) // Keep only the last MAX_LOG_LINES entries
-    .expire(listKey, LOG_EXPIRY_SECONDS)
-    .exec();
+  // Persist log line in list for late-joining subscribers
+  await redis.rpush(listKey, line);
+  await redis.expire(listKey, LOG_EXPIRY_SECONDS);
 
   // Broadcast to real-time SSE subscribers
   await redis.publish(channel, line);

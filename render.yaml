@@ -1,0 +1,55 @@
+# render.yaml — Render Blueprint for Whizan API + Dashboard
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Deploy to Render by connecting this repo and pointing to this file.
+
+services:
+  # ─── API (Fastify) ──────────────────────────────────────────────────────────
+  - type: web
+    name: whizan-api
+    runtime: node
+    rootDir: apps/api
+    buildCommand: npm install && npm run build
+    startCommand: node dist/index.js
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_PORT
+        value: "10000" # Render assigns port 10000 internally
+      - key: DATABASE_URL
+        sync: false # Fill in manually via Render dashboard
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: COOKIE_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        sync: false # Must be exactly 64 hex chars — fill manually
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_CALLBACK_URL
+        sync: false # e.g. https://whizan-api.onrender.com/api/auth/github/callback
+      - key: DASHBOARD_URL
+        sync: false # e.g. https://whizan-dashboard.onrender.com
+
+  # ─── Dashboard (Next.js) ────────────────────────────────────────────────────
+  - type: web
+    name: whizan-dashboard
+    runtime: node
+    rootDir: apps/dashboard
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        sync: false # e.g. https://whizan-api.onrender.com
+      - key: PORT
+        value: "10000"

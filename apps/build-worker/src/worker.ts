@@ -254,20 +254,6 @@ redisSub.on("message", async (channel, message) => {
     });
     // If it's already READY, it just needs its container started
     if (d && (d.status === "READY" || d.status === "PAUSED")) {
-      // ── Thundering Herd Guard (Worker Layer) ────────────────────────────────
-      // BullMQ's jobId deduplication: if a job with this exact ID already exists
-      // in the queue (waiting or active), the add() call is a no-op.
-      // This is the second line of defence after the Edge Router's Redis SET NX lock.
-      const jobId = `wakeup:${d.id}`;
-      const existing = await buildQueue.getJob(jobId);
-      if (existing) {
-        const state = await existing.getState();
-        if (state === "waiting" || state === "active" || state === "delayed") {
-          console.log(`[Scaler] Cold-start job already ${state} for ${d.id}, skipping duplicate.`);
-          return;
-        }
-      }
-
       console.log(`[Scaler] Triggering cold-start for ${d.id}`);
       await buildQueue.add("build", {
         deploymentId: d.id,
@@ -280,9 +266,6 @@ redisSub.on("message", async (channel, message) => {
         framework: d.project.framework,
         slug: d.project.slug,
         isResume: true,
-      }, {
-        // jobId deduplication: BullMQ rejects duplicate jobs with the same ID
-        jobId,
       });
     }
   }

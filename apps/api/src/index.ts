@@ -27,10 +27,16 @@ const app = Fastify({
 
 await app.register(fastifyCors, {
   origin: (origin, cb) => {
-    // Allow dashboard, any localhost, and no-origin requests (server-to-server)
+    // Allow:
+    // - No origin (server-to-server / curl)
+    // - Configured DASHBOARD_URL (e.g. Render production URL)
+    // - Any *.onrender.com subdomain (Render preview deploys)
+    // - Any localhost / 127.0.0.1 (local dev)
     const allowed =
       !origin ||
       origin === (process.env.DASHBOARD_URL || "http://localhost:3000") ||
+      /^https?:\/\/[a-z0-9-]+\.onrender\.com$/.test(origin) ||
+      /^https?:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin) ||
       /^http:\/\/localhost(:\d+)?$/.test(origin) ||
       /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin);
     cb(null, allowed);

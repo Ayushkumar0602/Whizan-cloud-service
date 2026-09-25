@@ -1,0 +1,40 @@
+// PM2 Ecosystem Config for DigitalOcean Droplet
+// Runs build-worker and edge-router as persistent processes using tsx
+module.exports = {
+  apps: [
+    {
+      name: "whizan-worker",
+      cwd: "/opt/whizan/apps/build-worker",
+      script: "npx",
+      args: "tsx src/worker.ts",
+      env_file: "/opt/whizan/.env.production",
+      interpreter: "none",
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "800M",
+      restart_delay: 5000,
+      exp_backoff_restart_delay: 100,
+      error_file: "/var/log/whizan/worker-error.log",
+      out_file: "/var/log/whizan/worker-out.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss",
+    },
+    {
+      name: "whizan-router",
+      cwd: "/opt/whizan/apps/edge-router",
+      script: "npx",
+      args: "tsx src/index.ts",
+      env_file: "/opt/whizan/.env.production",
+      interpreter: "none",
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "256M",
+      restart_delay: 3000,
+      exp_backoff_restart_delay: 100,
+      error_file: "/var/log/whizan/router-error.log",
+      out_file: "/var/log/whizan/router-out.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss",
+    },
+  ],
+};

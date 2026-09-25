@@ -166,24 +166,11 @@ const server = http.createServer(async (req, res) => {
 });
 
 async function handleWakeupAndProxy(deployment: DeploymentInfo, req: http.IncomingMessage, res: http.ServerResponse, slug: string) {
-  // ── Thundering Herd Guard ─────────────────────────────────────────────────
-  // Use Redis SET NX (atomic "set if not exists") as a distributed lock.
-  // Only the FIRST request among N concurrent cold-start requests will acquire
-  // the lock and publish the wakeup signal. All others skip the publish.
-  // The 30s TTL ensures the lock auto-releases if the worker crashes.
-  const lockKey = `waking:${deployment.deploymentId}`;
-  const acquired = await redis.set(lockKey, "1", "EX", 30, "NX");
+  console.log(`[Router] Cold start: waking up deployment ${deployment.deploymentId}...`);
+  // Publish wakeup
+  redis.publish("wakeup", deployment.deploymentId).catch(() => {});
 
-  if (acquired === "OK") {
-    // We are the winner — fire the single wakeup signal
-    console.log(`[Router] Cold start: waking up deployment ${deployment.deploymentId}...`);
-    redis.publish("wakeup", deployment.deploymentId).catch(() => {});
-  } else {
-    // Another concurrent request already triggered the wakeup — do nothing
-    console.log(`[Router] Cold start already in progress for ${deployment.deploymentId}, skipping duplicate wakeup.`);
-  }
-
-  // All requests (winner or not) get the loading screen immediately
+  // Instantly return the loading screen so the user sees feedback immediately, instead of a hanging browser tab
   const isHtml = req.headers.accept?.includes("text/html");
   if (isHtml) {
     res.writeHead(202, { "Content-Type": "text/html" });
@@ -262,16 +249,9 @@ server.on("upgrade", async (req, socket, head) => {
     proxy.ws(req, socket, head, { target: `http://127.0.0.1:${deployment.containerPort}` });
   } else {
     // Cold start for WebSockets. We can't render an auto-refresh HTML screen on a raw TCP socket.
-    // Apply the same Thundering Herd guard: only one wakeup published per cold-start cycle.
-    const lockKey = `waking:${deployment.deploymentId}`;
-    const acquired = await redis.set(lockKey, "1", "EX", 30, "NX");
-    if (acquired === "OK") {
-      console.log(`[Router] Cold start (WS): waking up deployment ${deployment.deploymentId}...`);
-      redis.publish("wakeup", deployment.deploymentId).catch(() => {});
-    } else {
-      console.log(`[Router] Cold start (WS) already in progress for ${deployment.deploymentId}, skipping duplicate wakeup.`);
-    }
-    // All WS connections get rejected so the client's reconnection loop kicks in
+    // We publish a wakeup event, then instantly reject the socket so the client app's reconnection logic kicks in.
+    console.log(`[Router] Cold start (WS): waking up deployment ${deployment.deploymentId}...`);
+    redis.publish("wakeup", deployment.deploymentId).catch(() => {});
     socket.write('HTTP/1.1 503 Service Unavailable\r\nRetry-After: 3\r\n\r\n');
     socket.destroy();
   }
