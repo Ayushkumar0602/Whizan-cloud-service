@@ -9,7 +9,7 @@ interface RunningApp {
 }
 
 const docker = new Docker({ socketPath: "/var/run/docker.sock" });
-const SSR_IMAGE = "node:20-alpine";
+const SSR_IMAGE = "node:20-slim";
 
 /**
  * Manages long-running SSR application containers.
