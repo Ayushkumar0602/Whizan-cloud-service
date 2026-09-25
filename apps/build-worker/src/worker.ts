@@ -90,15 +90,44 @@ const worker = new Worker<BuildJob>(
 
       // ── 2. Clone repo (always start clean) ──────────────────────────────
       if (!isResume) {
-        await log(`Cloning ${repoUrl} (branch: ${branch})...`);
         const { simpleGit } = await import("simple-git");
 
         // Always wipe and re-create the build dir to avoid stale leftovers
         await fs.rm(buildDir, { recursive: true, force: true }).catch(() => {});
         await fs.mkdir(buildDir, { recursive: true });
 
-        await simpleGit().clone(repoUrl, buildDir, ["--depth=1", `--branch=${branch}`]);
-        await log("✓ Clone complete");
+        // ── Resilient clone: try specified branch, fall back to auto-detected default ──
+        // Many repos use "master" while the user typed "main", or vice-versa.
+        // Instead of immediately failing, we detect the repo's actual default branch.
+        let resolvedBranch = branch;
+        try {
+          await log(`Cloning ${repoUrl} (branch: ${branch})...`);
+          await simpleGit().clone(repoUrl, buildDir, ["--depth=1", `--branch=${branch}`]);
+        } catch (cloneErr: unknown) {
+          const msg = cloneErr instanceof Error ? cloneErr.message : String(cloneErr);
+          const isBranchNotFound = msg.includes("Remote branch") || msg.includes("Could not find remote branch") || msg.includes("not found in upstream");
+
+          if (!isBranchNotFound) throw cloneErr; // Real error (auth, network, etc.) — re-throw
+
+          // Auto-detect the real default branch via ls-remote
+          await log(`⚠ Branch "${branch}" not found. Auto-detecting default branch...`);
+          try {
+            const lsResult = await simpleGit().listRemote(["--symref", repoUrl, "HEAD"]);
+            // Output looks like: "ref: refs/heads/master\tHEAD"
+            const match = lsResult.match(/ref: refs\/heads\/(\S+)\s+HEAD/);
+            resolvedBranch = match?.[1] ?? "master"; // Fallback to "master" if parsing fails
+          } catch {
+            resolvedBranch = "master"; // Last resort
+          }
+
+          await log(`ℹ Retrying clone with detected default branch: "${resolvedBranch}"`);
+          // Wipe the partially-cloned dir before retrying
+          await fs.rm(buildDir, { recursive: true, force: true }).catch(() => {});
+          await fs.mkdir(buildDir, { recursive: true });
+          await simpleGit().clone(repoUrl, buildDir, ["--depth=1", `--branch=${resolvedBranch}`]);
+        }
+
+        await log(`✓ Clone complete (branch: ${resolvedBranch})`);
       }
 
       // ── 3. Load & decrypt env vars ───────────────────────────────────────
