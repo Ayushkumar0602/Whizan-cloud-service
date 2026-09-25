@@ -9,7 +9,7 @@ services:
     name: whizan-api
     runtime: node
     rootDir: apps/api
-    buildCommand: cd ../../ && npm install && cd packages/db && npx prisma generate && cd ../../apps/api && npm run build
+    buildCommand: cd ../../ && npm install --include=dev && cd packages/db && npx prisma generate && cd ../../apps/api && npm run build
     startCommand: node dist/index.js
     plan: free
     healthCheckPath: /health
