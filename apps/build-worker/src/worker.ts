@@ -20,11 +20,8 @@ const BUILD_BASE_DIR = process.env.BUILD_BASE_DIR ?? "/tmp/hostify-builds";
 // redisPub: used for publishing logs + cancel signals
 const redisPub = new Redis(REDIS_URL, { maxRetriesPerRequest: null, enableReadyCheck: false });
 
-// redisSub: dedicated subscriber for per-deployment cancel channels
+// redisSub: dedicated subscriber connection (ioredis requirement)
 const redisSub = new Redis(REDIS_URL, { maxRetriesPerRequest: null, enableReadyCheck: false });
-
-// redisSub2: dedicated subscriber for global wakeup events (separate to avoid message routing conflicts)
-const redisSub2 = new Redis(REDIS_URL, { maxRetriesPerRequest: null, enableReadyCheck: false });
 
 const prisma = new PrismaClient();
 
@@ -90,44 +87,15 @@ const worker = new Worker<BuildJob>(
 
       // ── 2. Clone repo (always start clean) ──────────────────────────────
       if (!isResume) {
+        await log(`Cloning ${repoUrl} (branch: ${branch})...`);
         const { simpleGit } = await import("simple-git");
 
         // Always wipe and re-create the build dir to avoid stale leftovers
         await fs.rm(buildDir, { recursive: true, force: true }).catch(() => {});
         await fs.mkdir(buildDir, { recursive: true });
 
-        // ── Resilient clone: try specified branch, fall back to auto-detected default ──
-        // Many repos use "master" while the user typed "main", or vice-versa.
-        // Instead of immediately failing, we detect the repo's actual default branch.
-        let resolvedBranch = branch;
-        try {
-          await log(`Cloning ${repoUrl} (branch: ${branch})...`);
-          await simpleGit().clone(repoUrl, buildDir, ["--depth=1", `--branch=${branch}`]);
-        } catch (cloneErr: unknown) {
-          const msg = cloneErr instanceof Error ? cloneErr.message : String(cloneErr);
-          const isBranchNotFound = msg.includes("Remote branch") || msg.includes("Could not find remote branch") || msg.includes("not found in upstream");
-
-          if (!isBranchNotFound) throw cloneErr; // Real error (auth, network, etc.) — re-throw
-
-          // Auto-detect the real default branch via ls-remote
-          await log(`⚠ Branch "${branch}" not found. Auto-detecting default branch...`);
-          try {
-            const lsResult = await simpleGit().listRemote(["--symref", repoUrl, "HEAD"]);
-            // Output looks like: "ref: refs/heads/master\tHEAD"
-            const match = lsResult.match(/ref: refs\/heads\/(\S+)\s+HEAD/);
-            resolvedBranch = match?.[1] ?? "master"; // Fallback to "master" if parsing fails
-          } catch {
-            resolvedBranch = "master"; // Last resort
-          }
-
-          await log(`ℹ Retrying clone with detected default branch: "${resolvedBranch}"`);
-          // Wipe the partially-cloned dir before retrying
-          await fs.rm(buildDir, { recursive: true, force: true }).catch(() => {});
-          await fs.mkdir(buildDir, { recursive: true });
-          await simpleGit().clone(repoUrl, buildDir, ["--depth=1", `--branch=${resolvedBranch}`]);
-        }
-
-        await log(`✓ Clone complete (branch: ${resolvedBranch})`);
+        await simpleGit().clone(repoUrl, buildDir, ["--depth=1", `--branch=${branch}`]);
+        await log("✓ Clone complete");
       }
 
       // ── 3. Load & decrypt env vars ───────────────────────────────────────
@@ -240,50 +208,20 @@ const worker = new Worker<BuildJob>(
 
       await log(wasCancelled ? "⚡ Deployment cancelled by user" : `✗ Build failed: ${msg}`);
       await publishLog(redisPub, deploymentId, "__DONE__");
+      await markFailed(wasCancelled ? "Cancelled by user" : msg);
 
-      if (isResume) {
-        // ── Wakeup job failed (e.g. container wouldn't start) ──────────────
-        // CRITICAL: Do NOT mark as FAILED. The build artifacts on disk are
-        // still valid. Reset back to READY so the wakeup handler can try again
-        // on the next user request. Also clear the containerPort from Redis
-        // so the edge router knows the app is asleep.
-        console.warn(`[Worker] Wakeup failed for ${deploymentId} — resetting to READY so retry is possible. Reason: ${msg}`);
-        await prisma.deployment.update({
-          where: { id: deploymentId },
-          data: { status: "READY", containerPort: null },
-        }).catch(() => {});
-        // Clear containerPort from the edge router's Redis key
-        const routerKey = `deployment:${slug}`;
-        const raw = await redisPub.get(routerKey);
-        if (raw) {
-          try {
-            const info = JSON.parse(raw);
-            delete info.containerPort;
-            await redisPub.set(routerKey, JSON.stringify(info));
-          } catch { }
-        }
-        // Do NOT re-throw — BullMQ should not mark this as a failed job
-        // (the deployment isn't actually broken, just temporarily un-startable)
-      } else {
-        // Fresh build failure — mark as FAILED normally
-        await markFailed(wasCancelled ? "Cancelled by user" : msg);
-        // Clean up build dir on failure / cancellation (no app to serve)
+      // Clean up build dir on failure / cancellation (no app to serve)
+      if (!isResume) {
         await fs.rm(buildDir, { recursive: true, force: true }).catch(() => {});
-        if (!wasCancelled) {
-          throw err; // Re-throw so BullMQ marks job as failed
-        }
+      }
+
+      if (!wasCancelled) {
+        throw err; // Re-throw so BullMQ marks job as failed
       }
     } finally {
       // Always unsubscribe from cancel channel to free Redis resources
       redisSub.off("message", onCancelMessage);
       await redisSub.unsubscribe(cancelChannel).catch(() => {});
-
-      // Always clear the wakeup lock so the next user request can immediately
-      // retry — regardless of whether the wakeup succeeded or failed.
-      // Also remove the BullMQ jobId so deduplication doesn't block retries.
-      if (isResume) {
-        await redisPub.del(`wakeup-lock:${deploymentId}`).catch(() => {});
-      }
     }
   },
   {
@@ -305,67 +243,49 @@ worker.on("failed", (job, err) => {
 
 // ─── Scale-to-Zero Idle Scaler & Wakeup ──────────────────────────────────────
 
-// 1. Listen for wakeups from Edge Router (on a dedicated connection to avoid conflicts with cancel channels)
-redisSub2.subscribe("wakeup").catch(() => {});
-redisSub2.on("message", async (channel, message) => {
-  if (channel !== "wakeup") return;
+// 1. Listen for wakeups from Edge Router
+redisSub.subscribe("wakeup").catch(() => {});
+redisSub.on("message", async (channel, message) => {
+  if (channel === "wakeup") {
+    const dId = message;
+    const d = await prisma.deployment.findUnique({
+      where: { id: dId },
+      include: { project: true }
+    });
+    // If it's already READY, it just needs its container started
+    if (d && (d.status === "READY" || d.status === "PAUSED")) {
+      // ── Thundering Herd Guard (Worker Layer) ────────────────────────────────
+      // BullMQ's jobId deduplication: if a job with this exact ID already exists
+      // in the queue (waiting or active), the add() call is a no-op.
+      // This is the second line of defence after the Edge Router's Redis SET NX lock.
+      const jobId = `wakeup:${d.id}`;
+      const existing = await buildQueue.getJob(jobId);
+      if (existing) {
+        const state = await existing.getState();
+        if (state === "waiting" || state === "active" || state === "delayed") {
+          console.log(`[Scaler] Cold-start job already ${state} for ${d.id}, skipping duplicate.`);
+          return;
+        }
+      }
 
-  const dId = message;
-
-  // ── Guard 1: DB status check ─────────────────────────────────────────────
-  // Only wake up deployments that are READY (live but asleep) or PAUSED.
-  // If status is BUILDING, a wakeup job is already in-flight — do nothing.
-  const d = await prisma.deployment.findUnique({
-    where: { id: dId },
-    include: { project: true },
-  });
-
-  if (!d || (d.status !== "READY" && d.status !== "PAUSED" && d.status !== "FAILED")) {
-    console.log(`[Scaler] Wakeup ignored for ${dId} — status: ${d?.status ?? "not found"}`);
-    return;
-  }
-
-  // If FAILED, only allow wakeup if build artifacts still exist on disk
-  // (a container-start failure leaves artifacts intact; a build failure does not)
-  if (d.status === "FAILED") {
-    const buildDir = path.join(BUILD_BASE_DIR, d.id);
-    const artifactsExist = await fs.access(buildDir).then(() => true).catch(() => false);
-    if (!artifactsExist) {
-      console.log(`[Scaler] Wakeup ignored for ${dId} — FAILED with no build artifacts on disk`);
-      return;
+      console.log(`[Scaler] Triggering cold-start for ${d.id}`);
+      await buildQueue.add("build", {
+        deploymentId: d.id,
+        projectId: d.projectId,
+        repoUrl: d.project.githubRepoUrl,
+        branch: d.project.branch,
+        buildCommand: d.project.buildCommand,
+        installCommand: d.project.installCommand,
+        outputDir: d.project.outputDir,
+        framework: d.project.framework,
+        slug: d.project.slug,
+        isResume: true,
+      }, {
+        // jobId deduplication: BullMQ rejects duplicate jobs with the same ID
+        jobId,
+      });
     }
-    console.log(`[Scaler] Wakeup of FAILED deployment ${dId} — build artifacts exist, retrying container start`);
   }
-
-  // ── Guard 2: BullMQ jobId deduplication ──────────────────────────────────
-  // Using a deterministic jobId means BullMQ silently discards any duplicate
-  // add() calls for a deployment that already has a wakeup job queued/active.
-  // This is the primary defense against the Thundering Herd: 50 concurrent
-  // publish("wakeup") calls → 50 add() calls → only 1 job ever created.
-  const jobId = `wakeup:${dId}`;
-  console.log(`[Scaler] Triggering cold-start for ${d.id} (jobId: ${jobId})`);
-
-  await buildQueue.add(
-    "build",
-    {
-      deploymentId: d.id,
-      projectId: d.projectId,
-      repoUrl: d.project.githubRepoUrl,
-      branch: d.project.branch,
-      buildCommand: d.project.buildCommand,
-      installCommand: d.project.installCommand,
-      outputDir: d.project.outputDir,
-      framework: d.project.framework,
-      slug: d.project.slug,
-      isResume: true,
-    },
-    {
-      jobId, // ← The key: BullMQ will reject duplicates with the same jobId
-      // Do not retry wakeup jobs — if the container fails to start, the
-      // next user request will trigger a fresh wakeup attempt anyway.
-      attempts: 1,
-    }
-  );
 });
 
 // 2. Idle Scaler (Checks every minute)
@@ -419,126 +339,9 @@ const scalerInterval = setInterval(async () => {
 }, 60 * 1000);
 
 
-// ─── Startup Reconciliation (Zombie Container Healer) ────────────────────────
-//
-// Runs ONCE on boot. Scans all READY/BUILDING deployments in the DB and
-// compares them against actually-running Docker containers.
-//
-// Scenarios handled:
-//   A) Container is RUNNING  → all good, update DB/Redis with actual port
-//   B) Container is STOPPED  → mark as asleep (containerPort = null), the next
-//                              user request will trigger a clean wakeup
-//   C) Deployment is BUILDING but worker just booted → it was orphaned by a
-//      previous crash; mark as FAILED so the user can retry
-//   D) No container found at all for a READY deployment → same as (B)
-
-async function reconcileOnStartup(): Promise<void> {
-  console.log("[Worker] Running startup reconciliation...");
-
-  try {
-    const Docker = (await import("dockerode")).default;
-    const docker = new Docker({ socketPath: "/var/run/docker.sock" });
-
-    // Fetch all containers once — avoid N docker calls in a loop
-    const allContainers = await docker.listContainers({ all: true }).catch(() => [] as Awaited<ReturnType<typeof docker.listContainers>>);
-
-    // All deployments that could have live containers
-    const activeDeploys = await prisma.deployment.findMany({
-      where: { status: { in: ["READY", "BUILDING", "PAUSED"] } },
-      include: { project: true },
-    });
-
-    console.log(`[Worker] Reconciling ${activeDeploys.length} deployment(s)...`);
-
-    for (const d of activeDeploys) {
-      // ── Case C: Orphaned BUILDING job from a previous worker crash ──────────
-      // If the worker crashed mid-build, the deployment is stuck as BUILDING
-      // forever. Mark it FAILED so the user can push a new deployment.
-      if (d.status === "BUILDING") {
-        console.log(`[Worker] Orphaned build detected for ${d.id} — marking FAILED`);
-        await prisma.deployment.update({
-          where: { id: d.id },
-          data: {
-            status: "FAILED",
-            errorMessage: "Build was interrupted by a server restart. Please redeploy.",
-            buildFinishedAt: new Date(),
-          },
-        }).catch(() => {});
-        continue;
-      }
-
-      // ── Cases A, B, D: Check if the container is actually running ──────────
-      const match = allContainers.find((c) =>
-        c.Mounts?.some((m) => m.Source?.includes(d.id))
-      );
-
-      const isRunning = match?.State === "running";
-
-      if (isRunning && match) {
-        // Case A: Container is alive — sync the actual port back to DB + Redis
-        const portBinding = match.Ports?.find((p) => p.PrivatePort === 3000);
-        const actualPort = portBinding?.PublicPort;
-
-        if (actualPort && actualPort !== d.containerPort) {
-          console.log(`[Worker] Syncing port for ${d.id}: DB had ${d.containerPort}, Docker has ${actualPort}`);
-          await prisma.deployment.update({
-            where: { id: d.id },
-            data: { containerPort: actualPort },
-          }).catch(() => {});
-
-          // Update Edge Router Redis key with correct port
-          const routerKey = `deployment:${d.project.slug}`;
-          const raw = await redisPub.get(routerKey);
-          if (raw) {
-            const info = JSON.parse(raw);
-            info.containerPort = actualPort;
-            await redisPub.set(routerKey, JSON.stringify(info));
-          }
-        }
-      } else {
-        // Cases B & D: Container is dead or missing — mark as asleep
-        if (d.containerPort !== null) {
-          console.log(`[Worker] Zombie container for ${d.id} — marking asleep`);
-
-          // Clear containerPort in DB — dashboard will show "Sleeping"
-          await prisma.deployment.update({
-            where: { id: d.id },
-            data: { containerPort: null },
-          }).catch(() => {});
-
-          // Clear containerPort in Edge Router Redis key so next request
-          // triggers the wakeup flow instead of proxying to a dead port
-          const routerKey = `deployment:${d.project.slug}`;
-          const raw = await redisPub.get(routerKey);
-          if (raw) {
-            const info = JSON.parse(raw);
-            delete info.containerPort;
-            await redisPub.set(routerKey, JSON.stringify(info));
-          }
-
-          // Remove the dead container if it still exists in Docker
-          if (match) {
-            await docker.getContainer(match.Id).remove({ force: true }).catch(() => {});
-          }
-        }
-      }
-    }
-
-    console.log("[Worker] Reconciliation complete.");
-  } catch (err) {
-    // Non-fatal — log and continue. The worker should still start even if
-    // Docker is temporarily unavailable during reconciliation.
-    console.error("[Worker] Reconciliation error (non-fatal):", err);
-  }
-}
-
 // ─── Startup ─────────────────────────────────────────────────────────────────
 
 console.log("[Worker] Build worker started — waiting for jobs...");
-
-// Run reconciliation asynchronously on boot — don't block the worker from
-// accepting new jobs while it runs.
-reconcileOnStartup();
 
 // ─── Graceful shutdown ───────────────────────────────────────────────────────
 
@@ -548,7 +351,6 @@ async function shutdown(): Promise<void> {
   await worker.close();
   await redisPub.quit();
   await redisSub.quit();
-  await redisSub2.quit();
   await prisma.$disconnect();
   process.exit(0);
 }

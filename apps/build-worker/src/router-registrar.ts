@@ -19,6 +19,8 @@ export async function registerDeployment(
   info: DeploymentInfo
 ): Promise<void> {
   await redis.set(`deployment:${slug}`, JSON.stringify(info));
+  // Clear the Thundering Herd lock so a future scale-to-zero + cold-start cycle works correctly
+  await redis.del(`waking:${info.deploymentId}`);
   console.log(`[RouterRegistrar] Registered deployment for slug: ${slug} (type: ${info.type})`);
 }
 
