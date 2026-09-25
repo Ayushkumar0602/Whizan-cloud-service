@@ -25,7 +25,7 @@ interface RunBuildOptions {
 
 const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 
-const BUILD_IMAGE = "node:20-slim";
+const BUILD_IMAGE = "node:18-slim";
 const BUILD_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max per build
 
 /**
@@ -33,7 +33,11 @@ const BUILD_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max per build
  * Returns the container exit code (0 = success).
  */
 export async function runBuild(opts: RunBuildOptions): Promise<number> {
-  const { buildDir, installCommand, buildCommand, envVars, onLog, abortSignal } = opts;
+  let { buildDir, installCommand, buildCommand, envVars, onLog, abortSignal } = opts;
+  
+  if (installCommand === "npm install") {
+    installCommand = "npm install --no-fund --no-audit";
+  }
 
   // Format env vars for Docker
   const env = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);
