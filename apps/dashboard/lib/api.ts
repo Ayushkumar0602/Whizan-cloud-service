@@ -3,7 +3,7 @@
  * Handles auth token refresh automatically on 401.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 let accessToken: string | null = null;
 
