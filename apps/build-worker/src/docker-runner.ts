@@ -41,8 +41,8 @@ export async function runBuild(opts: RunBuildOptions): Promise<number> {
   const cmd = [
     "sh",
     "-c",
-    // Run install then build; pipe outputs together
-    `set -e && echo "--- Installing dependencies ---" && ${installCommand} && echo "--- Building ---" && ${buildCommand}`,
+    // chmod first so root-owned mount is writable, then install + build
+    `set -e && chmod -R 777 /app && echo "--- Installing dependencies ---" && ${installCommand} && echo "--- Building ---" && ${buildCommand}`,
   ];
 
   await onLog(`Container image: ${BUILD_IMAGE}`);
@@ -60,7 +60,7 @@ export async function runBuild(opts: RunBuildOptions): Promise<number> {
       // Mount the cloned repo and a global npm cache to speed up installs
       Binds: [
         `${path.resolve(buildDir)}:/app`,
-        `/tmp/hostify-npm-cache:/home/node/.npm`
+        `/tmp/whizan-npm-cache:/root/.npm`
       ],
       // Resource limits — increased to 2GB to prevent npm install OOM crashes
       Memory: 2048 * 1024 * 1024,       // 2 GB max RAM
@@ -74,8 +74,8 @@ export async function runBuild(opts: RunBuildOptions): Promise<number> {
       // Use default network mode so npm install can reach the internet
       AutoRemove: false,                // We remove manually after log capture
     },
-    // Prevent running as root inside container
-    User: "node",
+    // Run as root so we can write to the host-mounted /app directory
+    User: "root",
   });
 
   try {
