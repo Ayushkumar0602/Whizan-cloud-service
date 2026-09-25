@@ -105,7 +105,6 @@ export default function NewProjectPage() {
             <h2 className="section-title"><Globe size={15} /> You’re using Frontend Hosting</h2>
             <p className="section-copy">
               This service clones your GitHub repo, installs dependencies, builds the app, and publishes a URL.
-              Backend APIs and databases are not in this flow yet — they will show up as separate services.
             </p>
             <div className="confirm-box">
               <strong>What happens after you continue</strong>

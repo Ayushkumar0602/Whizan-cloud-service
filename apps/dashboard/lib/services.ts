@@ -17,38 +17,14 @@ export const CLOUD_SERVICES: CloudService[] = [
       "Connect a GitHub repo, preview every step of the build, and go live on a dedicated URL.",
     href: "/dashboard/projects/new",
     available: true,
-  },
-  {
-    id: "backend-apis",
-    name: "Backend APIs",
-    tagline: "Coming soon",
-    description: "Deploy Node and container APIs with health checks and rolling updates.",
-    available: false,
-    eta: "Next",
-  },
-  {
-    id: "managed-databases",
-    name: "Managed Databases",
-    tagline: "Coming soon",
-    description: "Provision Postgres with backups, credentials, and one-click attach to apps.",
-    available: false,
-    eta: "Soon",
-  },
-  {
-    id: "object-storage",
-    name: "Object Storage",
-    tagline: "Coming soon",
-    description: "Store build artifacts, uploads, and static assets next to your deploys.",
-    available: false,
-    eta: "Soon",
-  },
+  }
 ];
 
 export const DEPLOY_GUIDE = [
   {
     n: "01",
     title: "Pick a service",
-    body: "Start with Frontend Hosting. More Whizan services will appear here as they launch.",
+    body: "Start with Frontend Hosting to deploy your app.",
   },
   {
     n: "02",

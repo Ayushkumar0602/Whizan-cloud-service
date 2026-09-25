@@ -10,10 +10,7 @@ import {
   Settings,
   LogOut,
   ShieldAlert,
-  Layers,
-  Database,
-  Zap,
-  HardDrive
+  Layers
 } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -51,44 +48,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside className="sidebar">
         <div>
           <BrandMark href="/dashboard" />
-          
-          <div className="sidebar-group">
-            <div className="sidebar-group-label">Current Services</div>
-            <nav className="sidebar-nav">
-              {navItems.map(item => {
-                const Icon = item.icon;
-                const active = item.match(pathname);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`nav-item ${active ? "nav-item-active" : ""}`}
-                  >
-                    <Icon size={16} />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
-
-          <div className="sidebar-group" style={{ marginTop: '2rem' }}>
-            <div className="sidebar-group-label">Coming Soon</div>
-            <nav className="sidebar-nav">
-              <div className="nav-item nav-item-disabled" title="Coming Q4 2026">
-                <Database size={16} /> Serverless Postgres
-                <span className="badge-soon">Soon</span>
-              </div>
-              <div className="nav-item nav-item-disabled" title="Coming Q4 2026">
-                <Zap size={16} /> Edge Functions
-                <span className="badge-soon">Soon</span>
-              </div>
-              <div className="nav-item nav-item-disabled" title="Coming Q1 2027">
-                <HardDrive size={16} /> Object Storage
-                <span className="badge-soon">Soon</span>
-              </div>
-            </nav>
-          </div>
+          <nav className="sidebar-nav" style={{ marginTop: '1.5rem' }}>
+            {navItems.map(item => {
+              const Icon = item.icon;
+              const active = item.match(pathname);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`nav-item ${active ? "nav-item-active" : ""}`}
+                >
+                  <Icon size={16} />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
         </div>
 
         <div className="sidebar-bottom">

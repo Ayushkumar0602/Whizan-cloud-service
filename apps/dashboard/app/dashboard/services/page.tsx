@@ -9,7 +9,7 @@ export default function ServicesPage() {
     <div className="page">
       <PageHeader
         title="Cloud services"
-        subtitle="One catalog, one console. Use Frontend Hosting now — backend, databases, and storage will land in this same list."
+        subtitle="One catalog, one console. Start using Frontend Hosting right now."
       />
 
       <div className="service-grid" style={{ marginBottom: "2rem" }}>
