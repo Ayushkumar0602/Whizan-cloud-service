@@ -244,7 +244,7 @@ worker.on("failed", (job, err) => {
 // ─── Scale-to-Zero Idle Scaler & Wakeup ──────────────────────────────────────
 
 // 1. Listen for wakeups from Edge Router
-redisSub.subscribe("wakeup").catch(() => {});
+redisSub.subscribe("wakeup", "admin:commands").catch(() => {});
 redisSub.on("message", async (channel, message) => {
   if (channel === "wakeup") {
     const dId = message;
@@ -267,6 +267,34 @@ redisSub.on("message", async (channel, message) => {
         slug: d.project.slug,
         isResume: true,
       });
+    }
+  }
+
+  if (channel === "admin:commands") {
+    try {
+      const payload = JSON.parse(message);
+      const dId = payload.deploymentId;
+      console.log(`[Admin] Received ${payload.action} for deployment ${dId}`);
+      
+      const Docker = (await import("dockerode")).default;
+      const docker = new Docker({ socketPath: "/var/run/docker.sock" });
+      const containers = await docker.listContainers({ all: true }).catch(() => []);
+      
+      const matches = containers.filter((c) => c.Mounts?.some((m) => m.Source?.includes(dId)));
+      for (const info of matches) {
+        const container = docker.getContainer(info.Id);
+        if (info.State === "running") await container.stop({ t: 2 }).catch(() => {});
+        await container.remove({ force: true }).catch(() => {});
+        console.log(`[Admin] Removed container ${info.Id} for deployment ${dId}`);
+      }
+
+      if (payload.action === "DELETE_CONTAINER") {
+        await fs.rm(path.join(BUILD_BASE_DIR, dId), { recursive: true, force: true }).catch(() => {});
+        await redisPub.del(`build-logs:${dId}`);
+        console.log(`[Admin] Cleaned up files for deployment ${dId}`);
+      }
+    } catch (err) {
+      console.error("[Admin] Error executing command:", err);
     }
   }
 });

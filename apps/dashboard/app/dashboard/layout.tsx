@@ -10,6 +10,7 @@ import {
   LogOut,
   Boxes,
   ExternalLink,
+  ShieldAlert,
 } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -32,6 +33,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const navItems = [
     { href: "/dashboard", icon: LayoutDashboard, label: "Projects" },
     { href: "/dashboard/settings", icon: Settings, label: "Settings" },
+    { href: "/dashboard/admin", icon: ShieldAlert, label: "Admin" },
   ];
 
   async function handleLogout() {

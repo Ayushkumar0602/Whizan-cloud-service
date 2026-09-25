@@ -10,6 +10,7 @@ import { projectRoutes } from "./routes/projects.js";
 import { deploymentRoutes } from "./routes/deployments.js";
 import { envRoutes } from "./routes/env.js";
 import { webhookRoutes } from "./routes/webhooks.js";
+import { adminRoutes } from "./routes/admin.js";
 import { redisClient } from "./lib/redis.js";
 import { prisma } from "./lib/prisma.js";
 
@@ -75,6 +76,7 @@ await app.register(projectRoutes, { prefix: "/api/projects" });
 await app.register(deploymentRoutes, { prefix: "/api/projects" });
 await app.register(envRoutes, { prefix: "/api/projects" });
 await app.register(webhookRoutes, { prefix: "/api/webhooks" });
+await app.register(adminRoutes, { prefix: "/api/admin" });
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 
