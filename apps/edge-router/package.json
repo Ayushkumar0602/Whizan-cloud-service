@@ -10,6 +10,7 @@
     "lint": "eslint src/"
   },
   "dependencies": {
+    "dotenv": "^16.4.5",
     "finalhandler": "^1.2.0",
     "http-proxy": "^1.18.1",
     "ioredis": "^5.4.1",
