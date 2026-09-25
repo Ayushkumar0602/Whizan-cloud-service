@@ -145,7 +145,7 @@ export default function NewProjectPage() {
                     required
                     pattern="[-a-z0-9]+"
                   />
-                  <span className="input-hint">Live URL: <span className="mono">{form.slug || "slug"}.localhost:8080</span></span>
+                  <span className="input-hint">Live URL: <span className="mono">{form.slug || "slug"}.whizan.app</span></span>
                 </div>
               </div>
             </section>

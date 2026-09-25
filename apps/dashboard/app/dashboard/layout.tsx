@@ -11,6 +11,9 @@ import {
   LogOut,
   ShieldAlert,
   Layers,
+  Database,
+  Zap,
+  HardDrive
 } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -48,23 +51,44 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside className="sidebar">
         <div>
           <BrandMark href="/dashboard" />
-          <p className="sidebar-hint">Cloud console</p>
-          <nav className="sidebar-nav">
-            {navItems.map(item => {
-              const Icon = item.icon;
-              const active = item.match(pathname);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`nav-item ${active ? "nav-item-active" : ""}`}
-                >
-                  <Icon size={16} />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
+          
+          <div className="sidebar-group">
+            <div className="sidebar-group-label">Current Services</div>
+            <nav className="sidebar-nav">
+              {navItems.map(item => {
+                const Icon = item.icon;
+                const active = item.match(pathname);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`nav-item ${active ? "nav-item-active" : ""}`}
+                  >
+                    <Icon size={16} />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+
+          <div className="sidebar-group" style={{ marginTop: '2rem' }}>
+            <div className="sidebar-group-label">Coming Soon</div>
+            <nav className="sidebar-nav">
+              <div className="nav-item nav-item-disabled" title="Coming Q4 2026">
+                <Database size={16} /> Serverless Postgres
+                <span className="badge-soon">Soon</span>
+              </div>
+              <div className="nav-item nav-item-disabled" title="Coming Q4 2026">
+                <Zap size={16} /> Edge Functions
+                <span className="badge-soon">Soon</span>
+              </div>
+              <div className="nav-item nav-item-disabled" title="Coming Q1 2027">
+                <HardDrive size={16} /> Object Storage
+                <span className="badge-soon">Soon</span>
+              </div>
+            </nav>
+          </div>
         </div>
 
         <div className="sidebar-bottom">
@@ -114,6 +138,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--foreground); }
         .nav-item-active {
           background: var(--accent-glow); color: var(--accent); font-weight: 600;
+        }
+        .nav-item-disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          filter: grayscale(1);
+        }
+        .badge-soon {
+          margin-left: auto;
+          font-size: 0.65rem;
+          text-transform: uppercase;
+          background: rgba(255,255,255,0.1);
+          padding: 2px 6px;
+          border-radius: 4px;
+          letter-spacing: 0.5px;
+        }
+        .sidebar-group {
+          margin-top: 1.5rem;
+        }
+        .sidebar-group-label {
+          font-size: 0.75rem;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: var(--muted);
+          padding: 0 0.8rem;
+          margin-bottom: 0.5rem;
+          font-weight: 600;
         }
         .sidebar-bottom {
           display: flex; align-items: center; gap: 0.5rem;

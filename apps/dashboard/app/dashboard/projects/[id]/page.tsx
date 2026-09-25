@@ -103,7 +103,7 @@ export default function ProjectPage() {
         <div className="proj-actions">
           {latestDeploy?.status === "READY" && (
             <a
-              href={`http://${project.slug}.localhost:8080`}
+              href={latestDeploy.url || `http://${project.slug}.localhost:8080`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-secondary"
@@ -169,7 +169,7 @@ export default function ProjectPage() {
         </div>
         <div className="stat-card">
           <div className="stat-label">Deploy URL</div>
-          <div className="stat-value mono">{project.slug}.localhost:8080</div>
+          <div className="stat-value mono">{latestDeploy?.url?.replace('http://', '') || `${project.slug}.whizan.app`}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Deployments</div>

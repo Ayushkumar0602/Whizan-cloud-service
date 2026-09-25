@@ -210,9 +210,9 @@ export default function DeploymentPage() {
               {removing ? <><Loader2 size={14} className="spin-icon" /> Deleting…</> : <><Trash2 size={14} /> Delete</>}
             </button>
           )}
-          {isReady && projectSlug && (
+          {isReady && deployment?.url && (
             <a
-              href={`http://${projectSlug}.localhost:8080`}
+              href={deployment.url}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-primary"
