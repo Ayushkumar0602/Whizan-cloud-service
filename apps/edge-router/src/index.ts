@@ -44,6 +44,25 @@ const proxy = httpProxy.createProxyServer({
 
 proxy.on("error", (err, req, res) => {
   console.error(`[Router] Proxy error for ${req.headers.host}${req.url}:`, err.message);
+  
+  // Extract slug to trigger a cold-start (wakeup)
+  const host = req.headers.host || "";
+  let slug = "";
+  if (host.endsWith(`.${BASE_DOMAIN}`) || host.endsWith(`.${BASE_DOMAIN}:${ROUTER_PORT}`)) {
+    slug = host.split(".")[0];
+  } else {
+    slug = host.replace(/:.*$/, "");
+  }
+
+  // Look up deployment ID from Redis and trigger a wakeup
+  redis.get(`deployment:${slug}`).then(raw => {
+    if (raw) {
+      const dep = JSON.parse(raw);
+      console.log(`[Router] Container missing for ${slug} (proxy error). Triggering wakeup...`);
+      redis.publish("wakeup", dep.deploymentId).catch(() => {});
+    }
+  }).catch(() => {});
+
   if ("writeHead" in res && !res.headersSent) {
     const isHtml = req.headers.accept?.includes("text/html");
     if (isHtml) {
