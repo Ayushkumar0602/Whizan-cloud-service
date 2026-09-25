@@ -228,7 +228,7 @@ const worker = new Worker<BuildJob>(
   },
   {
     connection: redisPub,
-    concurrency: 1, // Only 1 build at a time to prevent OOM on 4GB VM
+    concurrency: 3,
     limiter: { max: 10, duration: 60_000 },
   }
 );

@@ -25,7 +25,7 @@ interface RunBuildOptions {
 
 const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 
-const BUILD_IMAGE = "node:18-slim";
+const BUILD_IMAGE = "node:20-slim";
 const BUILD_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max per build
 
 /**
@@ -33,11 +33,7 @@ const BUILD_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max per build
  * Returns the container exit code (0 = success).
  */
 export async function runBuild(opts: RunBuildOptions): Promise<number> {
-  let { buildDir, installCommand, buildCommand, envVars, onLog, abortSignal } = opts;
-  
-  if (installCommand === "npm install") {
-    installCommand = "npm install --no-fund --no-audit";
-  }
+  const { buildDir, installCommand, buildCommand, envVars, onLog, abortSignal } = opts;
 
   // Format env vars for Docker
   const env = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);
@@ -61,14 +57,16 @@ export async function runBuild(opts: RunBuildOptions): Promise<number> {
     WorkingDir: "/app",
     Env: env,
     HostConfig: {
-      // Mount only the cloned repo. Do NOT mount npm cache as bind mounts on cloud VMs 
-      // cause severe I/O bottlenecks and npm crashes.
+      // Mount the cloned repo and a global npm cache to speed up installs
       Binds: [
-        `${path.resolve(buildDir)}:/app`
+        `${path.resolve(buildDir)}:/app`,
+        `/tmp/whizan-npm-cache:/root/.npm`
       ],
-      // We don't apply strict memory limits here anymore because Next.js npm install
-      // can easily spike over 2GB and get OOM-killed. We'll handle this by limiting 
-      // BullMQ concurrency to 1 build at a time instead.
+      // Resource limits — increased to 2GB to prevent npm install OOM crashes
+      Memory: 2048 * 1024 * 1024,       // 2 GB max RAM
+      MemorySwap: 2048 * 1024 * 1024,   // No swap
+      CpuPeriod: 100000,
+      CpuQuota: 200000,                 // 2 CPU cores for faster builds
       // Security hardening
       ReadonlyRootfs: false,            // Build needs to write node_modules
       CapDrop: ["ALL"],                 // Drop all Linux capabilities
