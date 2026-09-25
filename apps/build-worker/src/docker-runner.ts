@@ -25,7 +25,7 @@ interface RunBuildOptions {
 
 const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 
-const BUILD_IMAGE = "node:20-alpine";
+const BUILD_IMAGE = "node:20-slim";
 const BUILD_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max per build
 
 /**
