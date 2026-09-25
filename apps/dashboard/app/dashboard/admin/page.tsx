@@ -121,6 +121,15 @@ export default function AdminPage() {
     } catch { alert("Failed to delete"); }
   };
 
+  const handleKillContainer = async (id: string) => {
+    if (!confirm(`Force kill and remove container ${id}?`)) return;
+    try {
+      await admin.killContainer(id);
+      alert("Kill command sent");
+      fetchStats();
+    } catch { alert("Failed to kill container"); }
+  };
+
   if (loading && !stats) {
     return <div style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>Loading Azure metrics...</div>;
   }
@@ -252,7 +261,7 @@ export default function AdminPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8125rem" }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--card-border)" }}>
-                    {["ID", "Name", "Image", "State", "Status", "Ports"].map(h => (
+                    {["ID", "Name", "Image", "State", "Status", "Ports", "Actions"].map(h => (
                       <th key={h} style={{ padding: "0.75rem 1rem", textAlign: "left", color: "var(--muted)", fontWeight: 500, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
                     ))}
                   </tr>
@@ -266,6 +275,11 @@ export default function AdminPage() {
                       <td style={{ padding: "0.75rem 1rem" }}><StatusBadge status={c.state} /></td>
                       <td style={{ padding: "0.75rem 1rem", color: "var(--muted)" }}>{c.status}</td>
                       <td style={{ padding: "0.75rem 1rem", fontFamily: "monospace", fontSize: "0.75rem" }}>{c.ports?.join(", ") || "—"}</td>
+                      <td style={{ padding: "0.75rem 1rem" }}>
+                        <button className="btn btn-danger" style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }} onClick={() => handleKillContainer(c.id)}>
+                          Kill
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

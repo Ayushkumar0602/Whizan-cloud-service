@@ -79,4 +79,16 @@ export const adminRoutes = async function (fastify: FastifyInstance) {
     await prisma.deployment.delete({ where: { id } }).catch(() => {});
     return { success: true };
   });
+
+  // 4. Force-kill a specific Docker container by its container ID
+  fastify.delete("/containers/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    
+    await redis.publish("admin:commands", JSON.stringify({
+      action: "KILL_CONTAINER_BY_ID",
+      containerId: id
+    }));
+
+    return { success: true };
+  });
 }

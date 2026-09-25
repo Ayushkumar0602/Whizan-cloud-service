@@ -275,11 +275,28 @@ redisSub.on("message", async (channel, message) => {
   if (channel === "admin:commands") {
     try {
       const payload = JSON.parse(message);
-      const dId = payload.deploymentId;
-      console.log(`[Admin] Received ${payload.action} for deployment ${dId}`);
       
       const Docker = (await import("dockerode")).default;
       const docker = new Docker({ socketPath: "/var/run/docker.sock" });
+
+      if (payload.action === "KILL_CONTAINER_BY_ID") {
+        const cId = payload.containerId;
+        console.log(`[Admin] Killing orphaned container ${cId}`);
+        const container = docker.getContainer(cId);
+        try {
+          const info = await container.inspect();
+          if (info.State.Running) await container.stop({ t: 2 }).catch(() => {});
+          await container.remove({ force: true }).catch(() => {});
+          console.log(`[Admin] Successfully removed container ${cId}`);
+        } catch (err) {
+          console.error(`[Admin] Failed to kill container ${cId}`, err);
+        }
+        return;
+      }
+
+      const dId = payload.deploymentId;
+      console.log(`[Admin] Received ${payload.action} for deployment ${dId}`);
+      
       const containers = await docker.listContainers({ all: true }).catch(() => []);
       
       const matches = containers.filter((c) => c.Mounts?.some((m) => m.Source?.includes(dId)));

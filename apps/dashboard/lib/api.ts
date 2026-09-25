@@ -245,4 +245,5 @@ export const admin = {
   stats: () => request<any>("/api/admin/stats"),
   stopContainer: (deploymentId: string) => request(`/api/admin/deployments/${deploymentId}/stop`, { method: "POST" }),
   deleteDeployment: (deploymentId: string) => request(`/api/admin/deployments/${deploymentId}`, { method: "DELETE" }),
+  killContainer: (containerId: string) => request(`/api/admin/containers/${containerId}`, { method: "DELETE" }),
 };
