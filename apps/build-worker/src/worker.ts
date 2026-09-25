@@ -348,9 +348,126 @@ const scalerInterval = setInterval(async () => {
 }, 60 * 1000);
 
 
+// ─── Startup Reconciliation (Zombie Container Healer) ────────────────────────
+//
+// Runs ONCE on boot. Scans all READY/BUILDING deployments in the DB and
+// compares them against actually-running Docker containers.
+//
+// Scenarios handled:
+//   A) Container is RUNNING  → all good, update DB/Redis with actual port
+//   B) Container is STOPPED  → mark as asleep (containerPort = null), the next
+//                              user request will trigger a clean wakeup
+//   C) Deployment is BUILDING but worker just booted → it was orphaned by a
+//      previous crash; mark as FAILED so the user can retry
+//   D) No container found at all for a READY deployment → same as (B)
+
+async function reconcileOnStartup(): Promise<void> {
+  console.log("[Worker] Running startup reconciliation...");
+
+  try {
+    const Docker = (await import("dockerode")).default;
+    const docker = new Docker({ socketPath: "/var/run/docker.sock" });
+
+    // Fetch all containers once — avoid N docker calls in a loop
+    const allContainers = await docker.listContainers({ all: true }).catch(() => [] as Awaited<ReturnType<typeof docker.listContainers>>);
+
+    // All deployments that could have live containers
+    const activeDeploys = await prisma.deployment.findMany({
+      where: { status: { in: ["READY", "BUILDING", "PAUSED"] } },
+      include: { project: true },
+    });
+
+    console.log(`[Worker] Reconciling ${activeDeploys.length} deployment(s)...`);
+
+    for (const d of activeDeploys) {
+      // ── Case C: Orphaned BUILDING job from a previous worker crash ──────────
+      // If the worker crashed mid-build, the deployment is stuck as BUILDING
+      // forever. Mark it FAILED so the user can push a new deployment.
+      if (d.status === "BUILDING") {
+        console.log(`[Worker] Orphaned build detected for ${d.id} — marking FAILED`);
+        await prisma.deployment.update({
+          where: { id: d.id },
+          data: {
+            status: "FAILED",
+            errorMessage: "Build was interrupted by a server restart. Please redeploy.",
+            buildFinishedAt: new Date(),
+          },
+        }).catch(() => {});
+        continue;
+      }
+
+      // ── Cases A, B, D: Check if the container is actually running ──────────
+      const match = allContainers.find((c) =>
+        c.Mounts?.some((m) => m.Source?.includes(d.id))
+      );
+
+      const isRunning = match?.State === "running";
+
+      if (isRunning && match) {
+        // Case A: Container is alive — sync the actual port back to DB + Redis
+        const portBinding = match.Ports?.find((p) => p.PrivatePort === 3000);
+        const actualPort = portBinding?.PublicPort;
+
+        if (actualPort && actualPort !== d.containerPort) {
+          console.log(`[Worker] Syncing port for ${d.id}: DB had ${d.containerPort}, Docker has ${actualPort}`);
+          await prisma.deployment.update({
+            where: { id: d.id },
+            data: { containerPort: actualPort },
+          }).catch(() => {});
+
+          // Update Edge Router Redis key with correct port
+          const routerKey = `deployment:${d.project.slug}`;
+          const raw = await redisPub.get(routerKey);
+          if (raw) {
+            const info = JSON.parse(raw);
+            info.containerPort = actualPort;
+            await redisPub.set(routerKey, JSON.stringify(info));
+          }
+        }
+      } else {
+        // Cases B & D: Container is dead or missing — mark as asleep
+        if (d.containerPort !== null) {
+          console.log(`[Worker] Zombie container for ${d.id} — marking asleep`);
+
+          // Clear containerPort in DB — dashboard will show "Sleeping"
+          await prisma.deployment.update({
+            where: { id: d.id },
+            data: { containerPort: null },
+          }).catch(() => {});
+
+          // Clear containerPort in Edge Router Redis key so next request
+          // triggers the wakeup flow instead of proxying to a dead port
+          const routerKey = `deployment:${d.project.slug}`;
+          const raw = await redisPub.get(routerKey);
+          if (raw) {
+            const info = JSON.parse(raw);
+            delete info.containerPort;
+            await redisPub.set(routerKey, JSON.stringify(info));
+          }
+
+          // Remove the dead container if it still exists in Docker
+          if (match) {
+            await docker.getContainer(match.Id).remove({ force: true }).catch(() => {});
+          }
+        }
+      }
+    }
+
+    console.log("[Worker] Reconciliation complete.");
+  } catch (err) {
+    // Non-fatal — log and continue. The worker should still start even if
+    // Docker is temporarily unavailable during reconciliation.
+    console.error("[Worker] Reconciliation error (non-fatal):", err);
+  }
+}
+
 // ─── Startup ─────────────────────────────────────────────────────────────────
 
 console.log("[Worker] Build worker started — waiting for jobs...");
+
+// Run reconciliation asynchronously on boot — don't block the worker from
+// accepting new jobs while it runs.
+reconcileOnStartup();
 
 // ─── Graceful shutdown ───────────────────────────────────────────────────────
 

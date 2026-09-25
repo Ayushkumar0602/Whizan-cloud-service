@@ -26,7 +26,7 @@ interface RunBuildOptions {
 const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 
 const BUILD_IMAGE = "node:20-alpine";
-const BUILD_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max per build
+const BUILD_TIMEOUT_MS = 5 * 60 * 1000; // 5 minute hard limit — kills infinite/malicious builds
 
 /**
  * Runs the user's build inside an isolated Docker container.
@@ -90,7 +90,8 @@ export async function runBuild(opts: RunBuildOptions): Promise<number> {
 
     // Stream logs line by line
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
+      const timeout = setTimeout(async () => {
+        await onLog(`✗ Build forcibly killed: exceeded the ${BUILD_TIMEOUT_MS / 60000}-minute hard timeout. Check your build command for infinite loops.`);
         container.kill().catch(() => {});
         reject(new Error(`Build timed out after ${BUILD_TIMEOUT_MS / 60000} minutes`));
       }, BUILD_TIMEOUT_MS);
