@@ -25,7 +25,7 @@ interface RunBuildOptions {
 
 const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 
-const BUILD_IMAGE = "node:20-slim";
+const BUILD_IMAGE = "node:18-slim";
 const BUILD_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max per build
 
 /**
@@ -33,7 +33,15 @@ const BUILD_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max per build
  * Returns the container exit code (0 = success).
  */
 export async function runBuild(opts: RunBuildOptions): Promise<number> {
-  const { buildDir, installCommand, buildCommand, envVars, onLog, abortSignal } = opts;
+  let { buildDir, installCommand, buildCommand, envVars, onLog, abortSignal } = opts;
+
+  // Force Node to garbage collect and not use excessive RAM
+  envVars["NODE_OPTIONS"] = "--max_old_space_size=2048";
+  
+  if (installCommand === "npm install") {
+    // Prevent network hang-ups and RAM bloat during install
+    installCommand = "npm install --no-fund --no-audit";
+  }
 
   // Format env vars for Docker
   const env = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);
@@ -57,16 +65,12 @@ export async function runBuild(opts: RunBuildOptions): Promise<number> {
     WorkingDir: "/app",
     Env: env,
     HostConfig: {
-      // Mount the cloned repo and a global npm cache to speed up installs
+      // Mount only the cloned repo.
       Binds: [
-        `${path.resolve(buildDir)}:/app`,
-        `/tmp/whizan-npm-cache:/root/.npm`
+        `${path.resolve(buildDir)}:/app`
       ],
-      // Resource limits — increased to 2GB to prevent npm install OOM crashes
-      Memory: 2048 * 1024 * 1024,       // 2 GB max RAM
-      MemorySwap: 2048 * 1024 * 1024,   // No swap
-      CpuPeriod: 100000,
-      CpuQuota: 200000,                 // 2 CPU cores for faster builds
+      // We explicitly removed the 2GB Memory cap so Docker is allowed to use 
+      // the VM's free 3GB of RAM and the Swap file you created.
       // Security hardening
       ReadonlyRootfs: false,            // Build needs to write node_modules
       CapDrop: ["ALL"],                 // Drop all Linux capabilities
