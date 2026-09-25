@@ -2,11 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { admin, type ProjectWithLatestDeploy } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Activity, Database, Server, Trash2, PowerOff, RefreshCw } from "lucide-react";
-import { toast } from "sonner";
 
 export default function AdminPage() {
   const [stats, setStats] = useState<{
@@ -23,7 +19,7 @@ export default function AdminPage() {
       const data = await admin.stats();
       setStats(data as any);
     } catch (err) {
-      toast.error("Failed to load admin stats");
+      alert("Failed to load admin stats");
     } finally {
       setLoading(false);
     }
@@ -36,10 +32,10 @@ export default function AdminPage() {
   const handleStop = async (id: string) => {
     try {
       await admin.stopContainer(id);
-      toast.success("Stop command sent to Azure worker");
+      alert("Stop command sent to Azure worker");
       fetchStats();
     } catch (err) {
-      toast.error("Failed to stop container");
+      alert("Failed to stop container");
     }
   };
 
@@ -47,106 +43,104 @@ export default function AdminPage() {
     if (!confirm("Are you sure? This will delete the deployment and wipe its container/files.")) return;
     try {
       await admin.deleteDeployment(id);
-      toast.success("Delete command sent to Azure worker");
+      alert("Delete command sent to Azure worker");
       fetchStats();
     } catch (err) {
-      toast.error("Failed to delete deployment");
+      alert("Failed to delete deployment");
     }
   };
 
   if (loading && !stats) {
-    return <div className="p-8 text-center text-muted-foreground">Loading Azure metrics...</div>;
+    return <div style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>Loading Azure metrics...</div>;
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 p-6">
-      <div className="flex justify-between items-center">
+    <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "2rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Admin Console</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="page-title" style={{ margin: 0 }}>Admin Console</h1>
+          <p style={{ color: "var(--muted)", margin: "0.25rem 0 0 0" }}>
             Real-time control over Azure Worker containers and deployments.
           </p>
         </div>
-        <Button onClick={fetchStats} variant="outline" className="gap-2">
-          <RefreshCw className="h-4 w-4" />
+        <button onClick={fetchStats} className="btn btn-secondary">
+          <RefreshCw size={14} />
           Refresh
-        </Button>
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.users ?? 0}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Projects</CardTitle>
-            <Database className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.projects ?? 0}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Deployments</CardTitle>
-            <Server className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.deployments ?? 0}</div>
-          </CardContent>
-        </Card>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "1.5rem" }}>
+        <div className="card" style={{ padding: "1.5rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1rem", color: "var(--muted)" }}>
+            <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>Total Users</span>
+            <Activity size={16} />
+          </div>
+          <div style={{ fontSize: "1.75rem", fontWeight: 700 }}>{stats?.users ?? 0}</div>
+        </div>
+        <div className="card" style={{ padding: "1.5rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1rem", color: "var(--muted)" }}>
+            <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>Total Projects</span>
+            <Database size={16} />
+          </div>
+          <div style={{ fontSize: "1.75rem", fontWeight: 700 }}>{stats?.projects ?? 0}</div>
+        </div>
+        <div className="card" style={{ padding: "1.5rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1rem", color: "var(--muted)" }}>
+            <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>Total Deployments</span>
+            <Server size={16} />
+          </div>
+          <div style={{ fontSize: "1.75rem", fontWeight: 700 }}>{stats?.deployments ?? 0}</div>
+        </div>
       </div>
 
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Active Azure Containers</h2>
-        <div className="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden">
+      <div>
+        <h2 className="section-title">Active Azure Containers</h2>
+        <div className="card" style={{ overflow: "hidden" }}>
           {stats?.activeDeployments?.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
+            <div style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>
               No active containers running on Azure.
             </div>
           ) : (
-            <div className="divide-y">
-              {stats?.activeDeployments?.map((deploy: any) => (
-                <div key={deploy.id} className="p-6 flex items-center justify-between hover:bg-muted/50 transition-colors">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-lg">{deploy.project?.name}</span>
-                      <Badge variant="default" className="bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/25">
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {stats?.activeDeployments?.map((deploy: any, i) => (
+                <div key={deploy.id} style={{ 
+                  padding: "1.5rem", 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "space-between",
+                  borderTop: i === 0 ? "none" : "1px solid var(--card-border)"
+                }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <span style={{ fontWeight: 600, fontSize: "1.125rem" }}>{deploy.project?.name}</span>
+                      <span style={{ background: "rgba(16, 185, 129, 0.1)", color: "#10b981", padding: "0.125rem 0.5rem", borderRadius: "100px", fontSize: "0.75rem", fontWeight: 600 }}>
                         {deploy.status}
-                      </Badge>
-                      <Badge variant="outline">{deploy.deploymentType}</Badge>
+                      </span>
+                      <span style={{ border: "1px solid var(--card-border)", color: "var(--muted)", padding: "0.125rem 0.5rem", borderRadius: "100px", fontSize: "0.75rem", fontWeight: 500 }}>
+                        {deploy.deploymentType}
+                      </span>
                     </div>
-                    <div className="text-sm text-muted-foreground flex items-center gap-2">
-                      <span>ID: <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{deploy.id.slice(0, 8)}</code></span>
+                    <div style={{ fontSize: "0.875rem", color: "var(--muted)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <span>ID: <code style={{ background: "rgba(255,255,255,0.05)", padding: "0.125rem 0.25rem", borderRadius: "4px" }}>{deploy.id.slice(0, 8)}</code></span>
                       <span>•</span>
-                      <span>URL: <a href={deploy.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{deploy.url}</a></span>
+                      <span>URL: <a href={deploy.url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "none" }}>{deploy.url}</a></span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Button 
-                      variant="secondary" 
-                      size="sm"
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <button 
+                      className="btn btn-secondary"
                       onClick={() => handleStop(deploy.id)}
-                      className="gap-2"
                     >
-                      <PowerOff className="h-4 w-4" />
+                      <PowerOff size={14} />
                       Pause Container
-                    </Button>
-                    <Button 
-                      variant="destructive" 
-                      size="sm"
+                    </button>
+                    <button 
+                      className="btn btn-danger"
                       onClick={() => handleDelete(deploy.id)}
-                      className="gap-2"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 size={14} />
                       Delete
-                    </Button>
+                    </button>
                   </div>
                 </div>
               ))}
