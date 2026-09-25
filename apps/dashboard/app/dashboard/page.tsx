@@ -1,120 +1,96 @@
 "use client";
 import { useEffect, useState } from "react";
 import { projects, type ProjectWithLatestDeploy } from "@/lib/api";
+import { CLOUD_SERVICES } from "@/lib/services";
+import { useAuth } from "@/lib/auth";
 import Link from "next/link";
-import { Plus, Globe, GitBranch, Clock, Zap, ExternalLink } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
+import { StatusBadge } from "@/components/status-badge";
+import { ArrowRight, Plus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
-function StatusDot({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    READY: "badge-ready",
-    BUILDING: "badge-building",
-    QUEUED: "badge-queued",
-    FAILED: "badge-failed",
-    CANCELLED: "badge-failed",
-  };
-  const labels: Record<string, string> = {
-    READY: "Ready", BUILDING: "Building…", QUEUED: "Queued",
-    FAILED: "Failed", CANCELLED: "Cancelled",
-  };
-  return (
-    <span className={`badge ${map[status] || "badge-queued"}`}>
-      <span className="dot" />
-      {labels[status] || status}
-    </span>
-  );
-}
-
-export default function DashboardPage() {
+export default function ConsolePage() {
+  const { user } = useAuth();
   const [list, setList] = useState<ProjectWithLatestDeploy[]>([]);
   const [loading, setLoading] = useState(true);
+  const firstName = (user?.name || user?.email || "there").split(" ")[0];
 
   useEffect(() => {
     projects.list()
       .then(setList)
-      .catch(() => toast.error("Failed to load projects"))
+      .catch(() => toast.error("Could not load projects"))
       .finally(() => setLoading(false));
   }, []);
 
   return (
     <div className="page">
-      {/* Header */}
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Projects</h1>
-          <p className="page-subtitle">Deploy, manage, and monitor your applications</p>
-        </div>
-        <Link href="/dashboard/projects/new" className="btn btn-primary" id="new-project-btn">
-          <Plus size={16} />
-          New Project
+      <PageHeader
+        title={`Good to see you, ${firstName}`}
+        subtitle="This is the Whizan Cloud Services console. Frontend Hosting is live — every other service below will appear here when it ships."
+        actions={
+          <Link href="/dashboard/projects/new" className="btn btn-primary" id="new-project-btn">
+            <Plus size={16} /> New frontend
+          </Link>
+        }
+      />
+
+      <h2 className="block-title">Services</h2>
+      <div className="service-grid" style={{ marginBottom: "2rem" }}>
+        {CLOUD_SERVICES.map(svc => {
+          const inner = (
+            <>
+              <div className="service-kicker">{svc.available ? "Available now" : `Coming ${svc.eta?.toLowerCase()}`}</div>
+              <div className="service-title">{svc.name}</div>
+              <p className="service-desc">{svc.description}</p>
+              {svc.available ? (
+                <span className="open-link">Open <ArrowRight size={14} /></span>
+              ) : (
+                <span className="badge badge-queued">Not yet available</span>
+              )}
+            </>
+          );
+          return svc.available ? (
+            <Link key={svc.id} href="/dashboard/hosting" className="service-card">
+              {inner}
+            </Link>
+          ) : (
+            <div key={svc.id} className="service-card service-card-soon">{inner}</div>
+          );
+        })}
+      </div>
+
+      <div className="page-header" style={{ marginBottom: "0.9rem" }}>
+        <h2 className="block-title" style={{ margin: 0 }}>Recent frontends</h2>
+        <Link href="/dashboard/hosting" style={{ fontSize: "0.85rem", color: "var(--accent)", textDecoration: "none" }}>
+          View all
         </Link>
       </div>
 
-      {/* Project grid */}
       {loading ? (
-        <div className="project-grid">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="project-card-skeleton">
-              <div className="skeleton" style={{ height: 20, width: "60%", marginBottom: 12 }} />
-              <div className="skeleton" style={{ height: 14, width: "40%" }} />
-            </div>
-          ))}
-        </div>
+        <div className="skeleton" style={{ height: 88 }} />
       ) : list.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-icon">🚀</div>
-          <h2>No projects yet</h2>
-          <p>Connect a GitHub repo and deploy your first project in seconds.</p>
+          <h2>No sites yet</h2>
+          <p>Create a Frontend Hosting project — we’ll walk you through repo, build, and go-live.</p>
           <Link href="/dashboard/projects/new" className="btn btn-primary" style={{ marginTop: "1rem" }}>
-            <Plus size={16} />
-            Create your first project
+            <Plus size={16} /> Start first deploy
           </Link>
         </div>
       ) : (
-        <div className="project-grid">
-          {list.map(p => {
+        <div className="recent-list">
+          {list.slice(0, 5).map(p => {
             const latest = p.deployments[0];
             return (
-              <Link
-                key={p.id}
-                href={`/dashboard/projects/${p.id}`}
-                className="project-card"
-                id={`project-${p.id}`}
-              >
-                <div className="project-card-top">
-                  <div className="project-icon">
-                    {p.name[0].toUpperCase()}
-                  </div>
-                  <div className="project-info">
-                    <div className="project-name">{p.name}</div>
-                    <div className="project-slug mono">/{p.slug}</div>
-                  </div>
-                  {latest && <StatusDot status={latest.status} />}
+              <Link key={p.id} href={`/dashboard/projects/${p.id}`} className="recent-row">
+                <div>
+                  <div className="recent-name">{p.name}</div>
+                  <div className="mono" style={{ color: "var(--muted)", fontSize: "0.75rem" }}>/{p.slug}</div>
                 </div>
-
-                <div className="project-meta">
-                  <span className="meta-item">
-                    <GitBranch size={12} />
-                    {p.branch}
-                  </span>
-                  <span className="meta-item">
-                    <Zap size={12} />
-                    {p.framework.toLowerCase()}
-                  </span>
-                  <span className="meta-item">
-                    <Clock size={12} />
-                    {formatDistanceToNow(new Date(p.updatedAt), { addSuffix: true })}
-                  </span>
-                </div>
-
-                {latest?.url && latest.status === "READY" && (
-                  <div className="project-url">
-                    <Globe size={12} />
-                    <span className="mono">{latest.url}</span>
-                    <ExternalLink size={11} />
-                  </div>
-                )}
+                {latest ? <StatusBadge status={latest.status} /> : <span className="badge badge-queued">No deploys</span>}
+                <span className="recent-when">
+                  {formatDistanceToNow(new Date(p.updatedAt), { addSuffix: true })}
+                </span>
               </Link>
             );
           })}
@@ -122,111 +98,20 @@ export default function DashboardPage() {
       )}
 
       <style>{`
-        .page {
-          padding: 2rem 2.5rem;
-          max-width: 1100px;
+        .block-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.75rem; }
+        .open-link { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; color: var(--accent); font-weight: 600; }
+        .recent-list {
+          border: 1px solid var(--card-border); border-radius: 14px; overflow: hidden; background: var(--card);
         }
-        .page-header {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          margin-bottom: 2rem;
+        .recent-row {
+          display: grid; grid-template-columns: 1fr auto auto; gap: 1rem; align-items: center;
+          padding: 0.95rem 1.15rem; border-bottom: 1px solid var(--card-border);
+          text-decoration: none; color: inherit;
         }
-        .page-title {
-          font-size: 1.5rem;
-          font-weight: 700;
-          letter-spacing: -0.02em;
-        }
-        .page-subtitle {
-          color: var(--muted);
-          font-size: 0.875rem;
-          margin-top: 0.25rem;
-        }
-        .project-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-          gap: 1rem;
-        }
-        .project-card {
-          display: block;
-          text-decoration: none;
-          color: inherit;
-          background: var(--card);
-          border: 1px solid var(--card-border);
-          border-radius: 12px;
-          padding: 1.25rem;
-          transition: all 0.15s;
-          animation: fade-in 0.3s ease-out;
-        }
-        .project-card:hover {
-          border-color: #2e2e42;
-          transform: translateY(-2px);
-          box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-        }
-        .project-card-skeleton {
-          background: var(--card);
-          border: 1px solid var(--card-border);
-          border-radius: 12px;
-          padding: 1.25rem;
-        }
-        .project-card-top {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          margin-bottom: 1rem;
-        }
-        .project-icon {
-          width: 38px; height: 38px;
-          background: var(--accent-glow);
-          border: 1px solid rgba(99,102,241,0.3);
-          color: var(--accent);
-          border-radius: 10px;
-          display: flex; align-items: center; justify-content: center;
-          font-weight: 700;
-          font-size: 1rem;
-          flex-shrink: 0;
-        }
-        .project-info { flex: 1; min-width: 0; }
-        .project-name { font-weight: 600; font-size: 0.9375rem; }
-        .project-slug { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
-        .project-meta {
-          display: flex;
-          gap: 0.875rem;
-          flex-wrap: wrap;
-        }
-        .meta-item {
-          display: flex;
-          align-items: center;
-          gap: 0.25rem;
-          font-size: 0.75rem;
-          color: var(--muted);
-        }
-        .project-url {
-          display: flex;
-          align-items: center;
-          gap: 0.375rem;
-          margin-top: 0.875rem;
-          padding: 0.4rem 0.625rem;
-          background: rgba(34,197,94,0.05);
-          border: 1px solid rgba(34,197,94,0.15);
-          border-radius: 6px;
-          font-size: 0.75rem;
-          color: var(--success);
-        }
-        .dot {
-          width: 6px; height: 6px;
-          border-radius: 50%;
-          background: currentColor;
-          display: inline-block;
-        }
-        .empty-state {
-          text-align: center;
-          padding: 5rem 2rem;
-          color: var(--muted);
-        }
-        .empty-icon { font-size: 3rem; margin-bottom: 1rem; }
-        .empty-state h2 { color: var(--foreground); font-size: 1.25rem; margin-bottom: 0.5rem; }
-        .empty-state p { font-size: 0.9rem; }
+        .recent-row:last-child { border-bottom: none; }
+        .recent-row:hover { background: var(--card-hover); }
+        .recent-name { font-weight: 600; }
+        .recent-when { font-size: 0.75rem; color: var(--muted); }
       `}</style>
     </div>
   );

@@ -27,11 +27,11 @@ export default function LoginPage() {
 
   return (
     <>
-      <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.5rem" }}>
+      <h1 style={{ fontSize: "1.4rem", fontWeight: 700, letterSpacing: "-0.03em" }}>
         Welcome back
       </h1>
-      <p style={{ color: "var(--muted)", marginBottom: "1.75rem", fontSize: "0.9rem" }}>
-        Sign in to your Hostify account
+      <p style={{ color: "var(--muted)", margin: "0.4rem 0 1.5rem", fontSize: "0.9rem" }}>
+        Sign in to the Whizan Cloud Services console
       </p>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -48,7 +48,6 @@ export default function LoginPage() {
             autoFocus
           />
         </div>
-
         <div>
           <label className="form-label">Password</label>
           <input
@@ -61,34 +60,27 @@ export default function LoginPage() {
             required
           />
         </div>
-
         <button
           id="login-btn"
           type="submit"
           className="btn btn-primary"
           disabled={loading}
-          style={{ marginTop: "0.5rem", width: "100%", justifyContent: "center", padding: "0.75rem" }}
+          style={{ marginTop: "0.35rem", width: "100%", padding: "0.8rem" }}
         >
-          {loading ? "Signing in…" : "Sign in →"}
+          {loading ? "Signing in…" : "Open console"}
         </button>
       </form>
 
-      <p style={{ marginTop: "1.5rem", textAlign: "center", fontSize: "0.875rem", color: "var(--muted)" }}>
-        Don&apos;t have an account?{" "}
+      <p style={{ marginTop: "1.35rem", textAlign: "center", fontSize: "0.875rem", color: "var(--muted)" }}>
+        New here?{" "}
         <Link href="/register" style={{ color: "var(--accent)", textDecoration: "none" }}>
-          Create one
+          Create a free account
         </Link>
       </p>
-
       <style>{`
         .form-label {
-          display: block;
-          font-size: 0.8125rem;
-          font-weight: 500;
-          color: var(--muted);
-          margin-bottom: 0.4rem;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
+          display: block; font-size: 0.75rem; font-weight: 600; color: var(--muted);
+          margin-bottom: 0.4rem; letter-spacing: 0.04em; text-transform: uppercase;
         }
       `}</style>
     </>

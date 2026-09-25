@@ -32,11 +32,11 @@ export default function RegisterPage() {
 
   return (
     <>
-      <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.5rem" }}>
-        Create your account
+      <h1 style={{ fontSize: "1.4rem", fontWeight: 700, letterSpacing: "-0.03em" }}>
+        Create your workspace
       </h1>
-      <p style={{ color: "var(--muted)", marginBottom: "1.75rem", fontSize: "0.9rem" }}>
-        Start deploying in seconds
+      <p style={{ color: "var(--muted)", margin: "0.4rem 0 1.5rem", fontSize: "0.9rem" }}>
+        You’ll land in Frontend Hosting — other Whizan services join this console later.
       </p>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -52,7 +52,6 @@ export default function RegisterPage() {
             autoFocus
           />
         </div>
-
         <div>
           <label className="form-label">Email</label>
           <input
@@ -65,7 +64,6 @@ export default function RegisterPage() {
             required
           />
         </div>
-
         <div>
           <label className="form-label">Password</label>
           <input
@@ -78,34 +76,27 @@ export default function RegisterPage() {
             required
           />
         </div>
-
         <button
           id="register-btn"
           type="submit"
           className="btn btn-primary"
           disabled={loading}
-          style={{ marginTop: "0.5rem", width: "100%", justifyContent: "center", padding: "0.75rem" }}
+          style={{ marginTop: "0.35rem", width: "100%", padding: "0.8rem" }}
         >
-          {loading ? "Creating account…" : "Get started →"}
+          {loading ? "Creating workspace…" : "Create workspace"}
         </button>
       </form>
 
-      <p style={{ marginTop: "1.5rem", textAlign: "center", fontSize: "0.875rem", color: "var(--muted)" }}>
+      <p style={{ marginTop: "1.35rem", textAlign: "center", fontSize: "0.875rem", color: "var(--muted)" }}>
         Already have an account?{" "}
         <Link href="/login" style={{ color: "var(--accent)", textDecoration: "none" }}>
           Sign in
         </Link>
       </p>
-
       <style>{`
         .form-label {
-          display: block;
-          font-size: 0.8125rem;
-          font-weight: 500;
-          color: var(--muted);
-          margin-bottom: 0.4rem;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
+          display: block; font-size: 0.75rem; font-weight: 600; color: var(--muted);
+          margin-bottom: 0.4rem; letter-spacing: 0.04em; text-transform: uppercase;
         }
       `}</style>
     </>

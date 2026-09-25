@@ -143,9 +143,9 @@ export default function AdminPage() {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h1 className="page-title" style={{ margin: 0 }}>Admin Console</h1>
+          <h1 className="page-title" style={{ margin: 0 }}>Admin</h1>
           <p style={{ color: "var(--muted)", margin: "0.25rem 0 0 0" }}>
-            Real-time Azure VM monitoring • Docker containers • Build queue
+            Whizan Cloud Services · worker health, containers, and the build queue
           </p>
         </div>
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>

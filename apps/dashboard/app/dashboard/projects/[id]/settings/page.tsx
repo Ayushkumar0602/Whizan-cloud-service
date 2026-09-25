@@ -67,7 +67,7 @@ export default function ProjectSettingsPage() {
     try {
       await projects.delete(id);
       toast.success("Project deleted");
-      router.push("/dashboard");
+      router.push("/dashboard/hosting");
     } catch (err: any) {
       toast.error(err.message || "Failed to delete");
     }

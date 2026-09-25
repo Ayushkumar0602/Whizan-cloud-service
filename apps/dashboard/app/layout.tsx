@@ -15,9 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Hostify — Deploy Anything",
-  description: "The fastest way to deploy your frontend, backend, and services.",
-  keywords: ["hosting", "deploy", "nextjs", "react", "serverless"],
+  title: "Whizan Cloud Services — Frontend Hosting",
+  description:
+    "Deploy frontends with a clear pipeline. More Whizan cloud services coming soon.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

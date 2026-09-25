@@ -6,9 +6,9 @@ export default function SettingsPage() {
 
   return (
     <div className="page">
-      <h1 className="page-title">Account Settings</h1>
+      <h1 className="page-title">Account</h1>
       <p className="page-subtitle" style={{ marginBottom: "2rem" }}>
-        Manage your profile and preferences
+        Workspace for Whizan Cloud Services
       </p>
 
       <section className="settings-section">
@@ -34,7 +34,7 @@ export default function SettingsPage() {
             { label: "API Server", value: "http://localhost:8000" },
             { label: "Dashboard", value: "http://localhost:3000" },
             { label: "Edge Router", value: "http://localhost:8080" },
-            { label: "PostgreSQL", value: "postgresql://localhost:5432/hostify" },
+            { label: "PostgreSQL", value: "postgresql://localhost:5432/whizan" },
             { label: "Redis", value: "redis://localhost:6379" },
           ].map(row => (
             <div key={row.label} className="info-row">

@@ -4,12 +4,13 @@ import { deployments as deploymentsApi, type Deployment, getAccessToken } from "
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft, CheckCircle2, XCircle, Loader2,
-  Clock, Terminal, AlertCircle, StopCircle, Globe,
+  ArrowLeft, Loader2, Clock, Terminal, StopCircle, Globe,
   PauseCircle, PlayCircle, Trash2
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
+import { StatusBadge } from "@/components/status-badge";
+import { DeployPipeline } from "@/components/deploy-pipeline";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -32,27 +33,21 @@ export default function DeploymentPage() {
     try {
       const d = await deploymentsApi.get(id, dId);
       setDeployment(d);
-      // Fetch project slug for the visit URL
       const { projects } = await import("@/lib/api");
       const p = await projects.get(id);
       setProjectSlug(p.slug);
       return d;
     } catch {
-      // silently ignore poll errors
+      // ignore poll errors
     }
   }, [id, dId]);
 
-  // Auto-scroll logs to bottom
   useEffect(() => {
-    if (logsRef.current) {
-      logsRef.current.scrollTop = logsRef.current.scrollHeight;
-    }
+    if (logsRef.current) logsRef.current.scrollTop = logsRef.current.scrollHeight;
   }, [logs]);
 
   useEffect(() => {
     loadDeployment();
-
-    // Start SSE log stream
     const token = getAccessToken();
     if (!token) {
       toast.error("Not authenticated — please refresh");
@@ -69,7 +64,7 @@ export default function DeploymentPage() {
         if (data.log === "__DONE__") {
           setStreaming(false);
           es.close();
-          loadDeployment(); // Refresh to get final status
+          loadDeployment();
           if (pollRef.current) clearInterval(pollRef.current);
           return;
         }
@@ -85,7 +80,6 @@ export default function DeploymentPage() {
       loadDeployment();
     };
 
-    // Also poll deployment status every 3s (backup for SSE)
     pollRef.current = setInterval(loadDeployment, 3000);
 
     return () => {
@@ -129,7 +123,6 @@ export default function DeploymentPage() {
     try {
       await deploymentsApi.resume(id, dId);
       toast.success("Resuming deployment...");
-      // Re-initialize polling and SSE by resetting states
       setStreaming(true);
       await loadDeployment();
       if (!pollRef.current) {
@@ -160,55 +153,30 @@ export default function DeploymentPage() {
   const isPaused = deployment?.status === "PAUSED";
   const isDone = ["READY", "FAILED", "CANCELLED", "PAUSED"].includes(deployment?.status ?? "");
 
-  const StatusIcon = () => {
-    if (!deployment) return <Loader2 size={20} className="spin-icon" />;
-    switch (deployment.status) {
-      case "READY":     return <CheckCircle2 size={20} color="var(--success)" />;
-      case "FAILED":    return <XCircle size={20} color="var(--danger)" />;
-      case "CANCELLED": return <AlertCircle size={20} color="#6b7280" />;
-      case "PAUSED":    return <PauseCircle size={20} color="#f59e0b" />;
-      default:          return <Loader2 size={20} className="spin-icon" color="var(--accent)" />;
-    }
-  };
-
   return (
     <div className="page">
       <Link href={`/dashboard/projects/${id}`} className="breadcrumb">
         <ArrowLeft size={14} /> Back to project
       </Link>
 
-      {/* Header */}
       <div className="deploy-header">
-        <div className="deploy-status-icon"><StatusIcon /></div>
         <div style={{ flex: 1 }}>
+          <div className="service-kicker">Frontend Hosting · live pipeline</div>
           <h1 className="page-title">
             {deployment?.commitHash === "manual"
-              ? "Manual Deploy"
+              ? "Manual deploy"
               : `Deploy ${deployment?.commitHash?.slice(0, 7) ?? "…"}`}
           </h1>
           {deployment?.commitMessage && (
             <p className="page-subtitle">{deployment.commitMessage.split("\n")[0]}</p>
           )}
           <div className="deploy-meta">
-            {deployment?.status && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span className={`badge badge-${
-                  deployment.status === "READY" ? "ready"
-                  : deployment.status === "BUILDING" ? "building"
-                  : deployment.status === "QUEUED" ? "queued"
-                  : "failed"}`}>
-                  {deployment.status}
-                </span>
-                {deployment.status === "READY" && deployment.deploymentType !== "STATIC" && deployment.containerPort === null && (
-                  <span className="badge" style={{ backgroundColor: '#1e293b', color: '#94a3b8', border: '1px solid #334155' }}>Asleep</span>
-                )}
-              </div>
-            )}
+            {deployment?.status && <StatusBadge status={deployment.status} />}
             {deployment?.deploymentType && (
               <span className="meta-item"><Terminal size={12} />{deployment.deploymentType}</span>
             )}
             {deployment?.status === "READY" && deployment?.deploymentType !== "STATIC" && (deployment as any).lastAccessed && (
-              <span className="meta-item" style={{ color: deployment.containerPort ? '#10b981' : '#94a3b8' }}>
+              <span className="meta-item" style={{ color: deployment.containerPort ? "#10b981" : "#94a3b8" }}>
                 {deployment.containerPort ? "Active" : "Idle"}: {formatDistanceToNow((deployment as any).lastAccessed, { addSuffix: true })}
               </span>
             )}
@@ -250,35 +218,36 @@ export default function DeploymentPage() {
               className="btn btn-primary"
               id="visit-deployment-btn"
             >
-              <Globe size={14} /> Visit site →
+              <Globe size={14} /> Visit site
             </a>
           )}
         </div>
       </div>
 
-      {/* Error message */}
+      <div style={{ marginBottom: "1.15rem" }}>
+        <DeployPipeline status={deployment?.status} logs={logs} />
+      </div>
+
       {deployment?.errorMessage && (
         <div className="error-banner">
-          <XCircle size={15} />
           <span>{deployment.errorMessage}</span>
         </div>
       )}
 
-      {/* Build logs */}
       <div className="logs-panel">
         <div className="logs-toolbar">
           <div className="logs-title">
             <Terminal size={14} />
-            Build Logs
-            {streaming && isActive && <span className="live-badge">● LIVE</span>}
+            Build logs
+            {streaming && isActive && <span className="live-badge">● Live</span>}
           </div>
-          <span className="logs-count">{logs.length} lines</span>
+          <span className="logs-count">{logs.length} lines · this is the raw worker output</span>
         </div>
         <div className="logs-body" ref={logsRef} id="build-logs">
           {logs.length === 0 ? (
             <div className="logs-waiting">
               {isActive || streaming
-                ? <><Loader2 size={16} className="spin-icon" /> Waiting for build to start…</>
+                ? <><Loader2 size={16} className="spin-icon" /> Waiting for the worker to start this step…</>
                 : <span style={{ color: "var(--muted)" }}>No logs recorded for this deployment.</span>
               }
             </div>
@@ -300,98 +269,30 @@ export default function DeploymentPage() {
       </div>
 
       <style>{`
-        .page { padding: 2rem 2.5rem; max-width: 1000px; }
-
-        .breadcrumb {
-          display: inline-flex; align-items: center; gap: 0.375rem;
-          font-size: 0.8125rem; color: var(--muted);
-          text-decoration: none; margin-bottom: 1.5rem;
-          transition: color 0.15s;
-        }
-        .breadcrumb:hover { color: var(--foreground); }
-
-        .deploy-header {
-          display: flex; align-items: flex-start; gap: 1rem;
-          margin-bottom: 1.5rem; flex-wrap: wrap;
-        }
-        .deploy-status-icon {
-          width: 40px; height: 40px;
-          display: flex; align-items: center; justify-content: center;
-          flex-shrink: 0; margin-top: 2px;
-        }
-        .page-title { font-size: 1.25rem; font-weight: 700; }
-        .page-subtitle { color: var(--muted); font-size: 0.875rem; margin-top: 0.25rem; }
-        .deploy-meta {
-          display: flex; align-items: center; gap: 0.75rem;
-          margin-top: 0.5rem; flex-wrap: wrap;
-        }
-        .meta-item {
-          display: flex; align-items: center; gap: 0.25rem;
-          font-size: 0.75rem; color: var(--muted);
-        }
-        .header-actions { display: flex; gap: 0.5rem; margin-left: auto; }
-        .spin-icon { animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
+        .deploy-header { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+        .deploy-meta { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem; flex-wrap: wrap; }
+        .meta-item { display: flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: var(--muted); }
+        .header-actions { display: flex; gap: 0.5rem; margin-left: auto; flex-wrap: wrap; }
         .error-banner {
-          display: flex; align-items: center; gap: 0.625rem;
-          background: rgba(239,68,68,0.08);
-          border: 1px solid rgba(239,68,68,0.2);
-          border-radius: 10px;
-          padding: 0.875rem 1.25rem;
-          color: var(--danger); font-size: 0.875rem;
-          margin-bottom: 1.25rem;
+          background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
+          border-radius: 10px; padding: 0.875rem 1.25rem; color: var(--danger);
+          font-size: 0.875rem; margin-bottom: 1.25rem;
         }
-
-        .logs-panel {
-          background: #070710;
-          border: 1px solid var(--card-border);
-          border-radius: 12px; overflow: hidden;
-        }
+        .logs-panel { background: #070b10; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; }
         .logs-toolbar {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 0.625rem 1rem;
-          background: var(--card);
-          border-bottom: 1px solid var(--card-border);
+          padding: 0.625rem 1rem; background: var(--card); border-bottom: 1px solid var(--card-border);
         }
-        .logs-title {
-          display: flex; align-items: center; gap: 0.5rem;
-          font-size: 0.8125rem; font-weight: 500; color: var(--muted);
-        }
-        .live-badge {
-          font-size: 0.6875rem; color: var(--success);
-          animation: pulse 2s ease-in-out infinite;
-        }
+        .logs-title { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; font-weight: 500; color: var(--muted); }
+        .live-badge { font-size: 0.6875rem; color: var(--success); animation: pulse 2s ease-in-out infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
         .logs-count { font-size: 0.75rem; color: var(--muted); }
-
-        .logs-body {
-          height: 540px; overflow-y: auto;
-          padding: 0.5rem 0;
-          font-family: var(--font-geist-mono), "Menlo", monospace;
-        }
-        .logs-waiting {
-          display: flex; align-items: center; gap: 0.625rem;
-          color: var(--muted); font-size: 0.8125rem;
-          padding: 2rem 1.25rem;
-        }
-        .log-line {
-          display: flex;
-          font-size: 0.75rem;
-          line-height: 1.65;
-          padding: 0.025rem 0;
-        }
+        .logs-body { height: 540px; overflow-y: auto; padding: 0.5rem 0; font-family: var(--font-geist-mono), Menlo, monospace; }
+        .logs-waiting { display: flex; align-items: center; gap: 0.625rem; color: var(--muted); font-size: 0.8125rem; padding: 2rem 1.25rem; }
+        .log-line { display: flex; font-size: 0.75rem; line-height: 1.65; }
         .log-line:hover { background: rgba(255,255,255,0.025); }
-        .log-num {
-          color: #2e2e4a;
-          padding: 0 1rem;
-          user-select: none;
-          flex-shrink: 0;
-          min-width: 4.5rem;
-          text-align: right;
-          white-space: pre;
-        }
-        .log-text { color: #b8b8d0; word-break: break-word; flex: 1; padding-right: 1rem; }
+        .log-num { color: #2e3a4a; padding: 0 1rem; user-select: none; flex-shrink: 0; min-width: 4.5rem; text-align: right; white-space: pre; }
+        .log-text { color: #b8c4d0; word-break: break-word; flex: 1; padding-right: 1rem; }
         .log-stderr .log-text { color: #f59e0b; }
         .log-success .log-text { color: #22c55e; }
         .log-error .log-text { color: #ef4444; }
