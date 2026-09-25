@@ -71,6 +71,7 @@ export async function runBuild(opts: RunBuildOptions): Promise<number> {
       ],
       // We explicitly removed the 2GB Memory cap so Docker is allowed to use 
       // the VM's free 3GB of RAM and the Swap file you created.
+      NetworkMode: "host", // Bypass Docker bridge to fix Azure MTU packet drops / NPM hangs
       // Security hardening
       ReadonlyRootfs: false,            // Build needs to write node_modules
       CapDrop: ["ALL"],                 // Drop all Linux capabilities
