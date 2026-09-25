@@ -15,6 +15,7 @@ import os from "os";
 
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 const BUILD_BASE_DIR = process.env.BUILD_BASE_DIR ?? "/tmp/hostify-builds";
+const BASE_DOMAIN = process.env.BASE_DOMAIN ?? "localhost";
 
 // ─── Shared singletons ───────────────────────────────────────────────────────
 
@@ -154,7 +155,7 @@ const worker = new Worker<BuildJob>(
       });
 
       // ── 8. Mark READY ────────────────────────────────────────────────────
-      const url = `http://${slug}.localhost`;
+      const url = `http://${slug}.${BASE_DOMAIN}`;
       await prisma.deployment.update({
         where: { id: deploymentId },
         data: {
