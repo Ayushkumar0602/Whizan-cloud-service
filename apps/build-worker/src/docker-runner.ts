@@ -62,11 +62,9 @@ export async function runBuild(opts: RunBuildOptions): Promise<number> {
         `${path.resolve(buildDir)}:/app`,
         `/tmp/whizan-npm-cache:/root/.npm`
       ],
-      // Resource limits — increased to 2GB to prevent npm install OOM crashes
-      Memory: 2048 * 1024 * 1024,       // 2 GB max RAM
-      MemorySwap: 2048 * 1024 * 1024,   // No swap
-      CpuPeriod: 100000,
-      CpuQuota: 200000,                 // 2 CPU cores for faster builds
+      // We don't apply strict memory limits here anymore because Next.js npm install
+      // can easily spike over 2GB and get OOM-killed. We'll handle this by limiting 
+      // BullMQ concurrency to 1 build at a time instead.
       // Security hardening
       ReadonlyRootfs: false,            // Build needs to write node_modules
       CapDrop: ["ALL"],                 // Drop all Linux capabilities
