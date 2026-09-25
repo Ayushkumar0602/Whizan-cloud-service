@@ -57,10 +57,10 @@ export async function runBuild(opts: RunBuildOptions): Promise<number> {
     WorkingDir: "/app",
     Env: env,
     HostConfig: {
-      // Mount the cloned repo and a global npm cache to speed up installs
+      // Mount only the cloned repo. Do NOT mount npm cache as bind mounts on cloud VMs 
+      // cause severe I/O bottlenecks and npm crashes.
       Binds: [
-        `${path.resolve(buildDir)}:/app`,
-        `/tmp/whizan-npm-cache:/root/.npm`
+        `${path.resolve(buildDir)}:/app`
       ],
       // We don't apply strict memory limits here anymore because Next.js npm install
       // can easily spike over 2GB and get OOM-killed. We'll handle this by limiting 
