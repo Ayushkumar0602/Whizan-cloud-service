@@ -14,6 +14,7 @@ type VMStats = {
   uptime: number;
   cpu: { cores: number; model: string; usagePercent: number };
   memory: { totalMB: number; usedMB: number; freeMB: number; usagePercent: number };
+  disk: { totalMB: number; usedMB: number; freeMB: number; usagePercent: number };
   docker: {
     containers: {
       id: string; name: string; image: string;
@@ -210,7 +211,7 @@ export default function AdminPage() {
 
       {/* VM Resources */}
       {vm && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1rem" }}>
           {/* CPU */}
           <div className="card" style={{ padding: "1.25rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
@@ -238,6 +239,21 @@ export default function AdminPage() {
             <ProgressBar percent={vm.memory.usagePercent} color={vm.memory.usagePercent > 80 ? "#ef4444" : vm.memory.usagePercent > 50 ? "#f59e0b" : "#10b981"} />
             <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: "0.5rem" }}>
               {vm.memory.usedMB} MB / {vm.memory.totalMB} MB • {vm.memory.freeMB} MB free
+            </div>
+          </div>
+
+          {/* Disk */}
+          <div className="card" style={{ padding: "1.25rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <HardDrive size={16} color="var(--accent)" />
+                <span style={{ fontWeight: 600 }}>Disk</span>
+              </div>
+              <span style={{ fontSize: "1.25rem", fontWeight: 700 }}>{vm.disk?.usagePercent ?? 0}%</span>
+            </div>
+            <ProgressBar percent={vm.disk?.usagePercent ?? 0} color={(vm.disk?.usagePercent ?? 0) > 80 ? "#ef4444" : (vm.disk?.usagePercent ?? 0) > 50 ? "#f59e0b" : "#10b981"} />
+            <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: "0.5rem" }}>
+              {vm.disk?.usedMB ?? 0} MB / {vm.disk?.totalMB ?? 0} MB • {vm.disk?.freeMB ?? 0} MB free
             </div>
           </div>
         </div>

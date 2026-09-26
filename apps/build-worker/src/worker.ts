@@ -413,6 +413,21 @@ const statsInterval = setInterval(async () => {
       };
     } catch {}
 
+    // Disk space stats
+    let diskStats = { totalMB: 0, usedMB: 0, freeMB: 0, usagePercent: 0 };
+    try {
+      const disk = await fs.statfs("/");
+      const totalMB = Math.round((disk.blocks * disk.bsize) / 1024 / 1024);
+      const freeMB = Math.round((disk.bfree * disk.bsize) / 1024 / 1024);
+      const usedMB = totalMB - freeMB;
+      diskStats = {
+        totalMB,
+        usedMB,
+        freeMB,
+        usagePercent: totalMB > 0 ? Math.round((usedMB / totalMB) * 1000) / 10 : 0,
+      };
+    } catch {}
+
     const stats = {
       timestamp: Date.now(),
       hostname: os.hostname(),
@@ -429,6 +444,7 @@ const statsInterval = setInterval(async () => {
         freeMB: Math.round(freeMem / 1024 / 1024),
         usagePercent: Math.round((usedMem / totalMem) * 1000) / 10,
       },
+      disk: diskStats,
       docker: {
         containers: dockerContainers,
         totalContainers: dockerContainers.length,
