@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
-import { projects, envVars, type ProjectWithDeployments, type EnvVariable } from "@/lib/api";
+import { projects, envVars, customDomains, type ProjectWithDeployments, type EnvVariable } from "@/lib/api";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Trash2, Eye, EyeOff, Lock, Save } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Eye, EyeOff, Lock, Save, Globe } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ProjectSettingsPage() {
@@ -17,15 +17,21 @@ export default function ProjectSettingsPage() {
   const [newSecret, setNewSecret] = useState(false);
   const [addingEnv, setAddingEnv] = useState(false);
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
+  
+  const [domainList, setDomainList] = useState<any[]>([]);
+  const [newDomain, setNewDomain] = useState("");
+  const [addingDomain, setAddingDomain] = useState(false);
 
   async function load() {
     try {
-      const [p, envs] = await Promise.all([
+      const [p, envs, domains] = await Promise.all([
         projects.get(id),
         envVars.list(id),
+        customDomains.list(id)
       ]);
       setProject(p);
       setEnvList(envs);
+      setDomainList(domains);
     } catch {
       toast.error("Failed to load settings");
     } finally {
@@ -59,6 +65,33 @@ export default function ProjectSettingsPage() {
       await load();
     } catch {
       toast.error("Failed to delete");
+    }
+  }
+
+  async function handleAddDomain(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newDomain.trim()) return;
+    setAddingDomain(true);
+    try {
+      await customDomains.add(id, newDomain.trim().toLowerCase());
+      toast.success(`Domain added`);
+      setNewDomain("");
+      await load();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add domain");
+    } finally {
+      setAddingDomain(false);
+    }
+  }
+
+  async function handleDeleteDomain(domain: string) {
+    if (!confirm(`Remove ${domain}?`)) return;
+    try {
+      await customDomains.delete(id, domain);
+      toast.success("Domain removed");
+      await load();
+    } catch {
+      toast.error("Failed to remove domain");
     }
   }
 
@@ -175,6 +208,59 @@ export default function ProjectSettingsPage() {
           >
             <Plus size={15} />
             {addingEnv ? "Saving…" : "Add"}
+          </button>
+        </form>
+      </section>
+
+      {/* Custom Domains */}
+      <section className="settings-section">
+        <div className="settings-section-header">
+          <div>
+            <h2 className="settings-section-title">Custom Domains</h2>
+            <p className="settings-section-desc">Connect a custom domain with automatic SSL via Let's Encrypt.</p>
+          </div>
+        </div>
+
+        {domainList.length > 0 && (
+          <div className="env-list">
+            {domainList.map(d => (
+              <div key={d.id} className="env-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: "0.5rem" }}>
+                <div style={{ display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center" }}>
+                  <div className="env-key" style={{ fontSize: "1rem" }}>
+                    <Globe size={14} />
+                    <span className="mono">{d.domain}</span>
+                  </div>
+                  <button className="icon-btn icon-btn-danger" onClick={() => handleDeleteDomain(d.domain)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <div style={{ padding: "0.75rem", background: "rgba(0,0,0,0.3)", borderRadius: "6px", fontSize: "0.8125rem", width: "100%", color: "var(--muted)" }}>
+                  <div><strong>DNS Configuration</strong></div>
+                  <div style={{ marginTop: "0.5rem" }}>
+                    Point your domain to this project by adding a CNAME record or A record.
+                  </div>
+                  <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
+                    <div><span style={{color: "var(--accent)"}}>Type:</span> CNAME</div>
+                    <div><span style={{color: "var(--accent)"}}>Name:</span> {d.domain.split(".")[0] === "www" ? "www" : "@"}</div>
+                    <div><span style={{color: "var(--accent)"}}>Value:</span> {project.slug}.whizan.cloud</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <form onSubmit={handleAddDomain} className="env-add-form">
+          <input
+            className="input mono"
+            placeholder="e.g. www.myawesomeapp.com"
+            value={newDomain}
+            onChange={e => setNewDomain(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <button type="submit" className="btn btn-secondary" disabled={addingDomain || !newDomain}>
+            <Plus size={15} />
+            {addingDomain ? "Adding…" : "Add"}
           </button>
         </form>
       </section>

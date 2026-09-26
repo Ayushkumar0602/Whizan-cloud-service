@@ -6,7 +6,7 @@ import fastifyCors from "@fastify/cors";
 import fastifyRateLimit from "@fastify/rate-limit";
 
 import { authRoutes } from "./routes/auth.js";
-import { projectRoutes } from "./routes/projects.js";
+import { projectRoutes, caddyVerifyRoutes } from "./routes/projects.js";
 import { deploymentRoutes } from "./routes/deployments.js";
 import { envRoutes } from "./routes/env.js";
 import { webhookRoutes } from "./routes/webhooks.js";
@@ -80,6 +80,7 @@ await app.register(deploymentRoutes, { prefix: "/api/projects" });
 await app.register(envRoutes, { prefix: "/api/projects" });
 await app.register(webhookRoutes, { prefix: "/api/webhooks" });
 await app.register(adminRoutes, { prefix: "/api/admin" });
+await app.register(caddyVerifyRoutes, { prefix: "/api" });
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 

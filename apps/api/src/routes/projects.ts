@@ -88,6 +88,45 @@ export async function projectRoutes(fastify: FastifyInstance) {
     return prisma.project.update({ where: { id }, data: body.data });
   });
 
+  // GET /api/projects/:id/domains
+  fastify.get("/:id/domains", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { userId } = request.user;
+    const project = await prisma.project.findFirst({ where: { id, userId } });
+    if (!project) return reply.code(404).send({ error: "Project not found" });
+    return prisma.customDomain.findMany({ where: { projectId: id } });
+  });
+
+  // POST /api/projects/:id/domains
+  fastify.post("/:id/domains", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { userId } = request.user;
+    const { domain } = request.body as { domain: string };
+    
+    if (!domain || !domain.includes(".")) return reply.code(400).send({ error: "Invalid domain" });
+
+    const project = await prisma.project.findFirst({ where: { id, userId } });
+    if (!project) return reply.code(404).send({ error: "Project not found" });
+
+    const existing = await prisma.customDomain.findUnique({ where: { domain } });
+    if (existing) return reply.code(409).send({ error: "Domain already in use" });
+
+    const cd = await prisma.customDomain.create({ data: { projectId: id, domain } });
+    return reply.code(201).send(cd);
+  });
+
+  // DELETE /api/projects/:id/domains/:domain
+  fastify.delete("/:id/domains/:domain", async (request, reply) => {
+    const { id, domain } = request.params as { id: string, domain: string };
+    const { userId } = request.user;
+    
+    const project = await prisma.project.findFirst({ where: { id, userId } });
+    if (!project) return reply.code(404).send({ error: "Project not found" });
+
+    await prisma.customDomain.deleteMany({ where: { projectId: id, domain } });
+    return reply.send({ ok: true });
+  });
+
   // DELETE /api/projects/:id — Full cascade: containers + files + Redis + DB
   fastify.delete("/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
@@ -124,5 +163,22 @@ export async function projectRoutes(fastify: FastifyInstance) {
     await prisma.project.delete({ where: { id } });
 
     return reply.send({ ok: true });
+  });
+}
+
+// Global hook exception for Caddy Verify Endpoint
+export async function caddyVerifyRoutes(fastify: FastifyInstance) {
+  // GET /api/verify-domain?domain=...
+  // Called by Caddy on-demand TLS to authorize SSL certificate issuance
+  fastify.get("/verify-domain", async (request, reply) => {
+    const { domain } = request.query as { domain?: string };
+    if (!domain) return reply.code(400).send("Missing domain");
+
+    const exists = await prisma.customDomain.findUnique({ where: { domain } });
+    if (exists) {
+      return reply.code(200).send("OK");
+    } else {
+      return reply.code(404).send("Not Found");
+    }
   });
 }

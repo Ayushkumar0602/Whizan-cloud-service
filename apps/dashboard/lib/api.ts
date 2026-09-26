@@ -172,6 +172,14 @@ export const envVars = {
     request(`/api/projects/${projectId}/env/${key}`, { method: "DELETE" }),
 };
 
+export const customDomains = {
+  list: (projectId: string) => request<any[]>(`/api/projects/${projectId}/domains`),
+  add: (projectId: string, domain: string) => 
+    request<any>(`/api/projects/${projectId}/domains`, { method: "POST", body: JSON.stringify({ domain }) }),
+  delete: (projectId: string, domain: string) => 
+    request(`/api/projects/${projectId}/domains/${domain}`, { method: "DELETE" }),
+};
+
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 export type User = {
