@@ -15,6 +15,7 @@ export interface BuildJob {
 }
 
 interface RunBuildOptions {
+  projectId: string;
   buildDir: string;
   installCommand: string;
   buildCommand: string;
@@ -33,7 +34,7 @@ const BUILD_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max per build
  * Returns the container exit code (0 = success).
  */
 export async function runBuild(opts: RunBuildOptions): Promise<number> {
-  let { buildDir, installCommand, buildCommand, envVars, onLog, abortSignal } = opts;
+  let { projectId, buildDir, installCommand, buildCommand, envVars, onLog, abortSignal } = opts;
 
   // Force Node to garbage collect and not use excessive RAM
   envVars["NODE_OPTIONS"] = "--max_old_space_size=2048";
@@ -59,15 +60,25 @@ export async function runBuild(opts: RunBuildOptions): Promise<number> {
   // Pull image if not present
   await ensureImage(BUILD_IMAGE);
 
+  // Setup persistent cache directories
+  const fs = await import("fs/promises");
+  const cacheBase = process.env.CACHE_BASE_DIR ?? "/opt/whizan-cache";
+  const npmCache = path.join(cacheBase, projectId, "npm");
+  const nextCache = path.join(cacheBase, projectId, "next");
+  await fs.mkdir(npmCache, { recursive: true }).catch(() => {});
+  await fs.mkdir(nextCache, { recursive: true }).catch(() => {});
+
   const container = await docker.createContainer({
     Image: BUILD_IMAGE,
     Cmd: cmd,
     WorkingDir: "/app",
     Env: env,
     HostConfig: {
-      // Mount only the cloned repo.
+      // Mount the cloned repo and persistent caches
       Binds: [
-        `${path.resolve(buildDir)}:/app`
+        `${path.resolve(buildDir)}:/app`,
+        `${npmCache}:/root/.npm`,
+        `${nextCache}:/app/.next/cache`
       ],
       // We explicitly removed the 2GB Memory cap so Docker is allowed to use 
       // the VM's free 3GB of RAM and the Swap file you created.

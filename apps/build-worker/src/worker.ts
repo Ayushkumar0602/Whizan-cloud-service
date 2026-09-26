@@ -112,6 +112,7 @@ const worker = new Worker<BuildJob>(
       if (!isResume) {
         await log("Starting build container...");
         const exitCode = await runBuild({
+          projectId,
           buildDir,
           installCommand,
           buildCommand,
