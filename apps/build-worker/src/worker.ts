@@ -294,25 +294,6 @@ redisSub.on("message", async (channel, message) => {
         return;
       }
 
-      const dId = payload.deploymentId;
-      console.log(`[Admin] Received ${payload.action} for deployment ${dId}`);
-      
-      const containers = await docker.listContainers({ all: true }).catch(() => []);
-      
-      const matches = containers.filter((c) => c.Mounts?.some((m) => m.Source?.includes(dId)));
-      for (const info of matches) {
-        const container = docker.getContainer(info.Id);
-        if (info.State === "running") await container.stop({ t: 2 }).catch(() => {});
-        await container.remove({ force: true }).catch(() => {});
-        console.log(`[Admin] Removed container ${info.Id} for deployment ${dId}`);
-      }
-
-      if (payload.action === "DELETE_CONTAINER") {
-        await fs.rm(path.join(BUILD_BASE_DIR, dId), { recursive: true, force: true }).catch(() => {});
-        await redisPub.del(`build-logs:${dId}`);
-        console.log(`[Admin] Cleaned up files for deployment ${dId}`);
-      }
-      
       if (payload.action === "DELETE_FILE") {
         const targetPath = payload.path;
         if (targetPath.startsWith("/opt/whizan-builds/") || targetPath.startsWith("/var/log/whizan/")) {
@@ -320,6 +301,27 @@ redisSub.on("message", async (channel, message) => {
           await fs.rm(targetPath, { recursive: true, force: true }).catch(() => {});
         }
         return;
+      }
+
+      if (payload.action === "STOP_CONTAINER" || payload.action === "DELETE_CONTAINER") {
+        const dId = payload.deploymentId;
+        console.log(`[Admin] Received ${payload.action} for deployment ${dId}`);
+        
+        const containers = await docker.listContainers({ all: true }).catch(() => []);
+        
+        const matches = containers.filter((c) => c.Mounts?.some((m) => m.Source?.includes(dId)));
+        for (const info of matches) {
+          const container = docker.getContainer(info.Id);
+          if (info.State === "running") await container.stop({ t: 2 }).catch(() => {});
+          await container.remove({ force: true }).catch(() => {});
+          console.log(`[Admin] Removed container ${info.Id} for deployment ${dId}`);
+        }
+
+        if (payload.action === "DELETE_CONTAINER") {
+          await fs.rm(path.join(BUILD_BASE_DIR, dId), { recursive: true, force: true }).catch(() => {});
+          await redisPub.del(`build-logs:${dId}`);
+          console.log(`[Admin] Cleaned up files for deployment ${dId}`);
+        }
       }
     } catch (err) {
       console.error("[Admin] Error executing command:", err);
