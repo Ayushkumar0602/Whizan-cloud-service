@@ -1,41 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { admin } from "@/lib/api";
 import {
   Activity, Database, Server, Trash2, PowerOff, RefreshCw,
-  Cpu, HardDrive, Container, Clock, Wifi, WifiOff, Layers, Terminal
+  Cpu, HardDrive, Wifi, WifiOff, Layers
 } from "lucide-react";
-
-type VMStats = {
-  timestamp: number;
-  hostname: string;
-  platform: string;
-  uptime: number;
-  cpu: { cores: number; model: string; usagePercent: number };
-  memory: { totalMB: number; usedMB: number; freeMB: number; usagePercent: number };
-  disk: { totalMB: number; usedMB: number; freeMB: number; usagePercent: number };
-  docker: {
-    containers: {
-      id: string; name: string; image: string;
-      state: string; status: string; created: number;
-      ports: string[];
-      deploymentId?: string | null;
-    }[];
-    totalContainers: number;
-    runningContainers: number;
-  };
-  queue: { waiting: number; active: number; completed: number; failed: number };
-  files?: { path: string; type: string; sizeMB: number }[];
-};
-
-type AdminStats = {
-  users: number;
-  projects: number;
-  deployments: number;
-  allDeployments: any[];
-  vmStats: VMStats | null;
-};
+import { useAdminStats } from "../../../hooks/useAdminStats";
 
 function formatUptime(seconds: number) {
   const d = Math.floor(seconds / 86400);
@@ -67,9 +37,6 @@ function StatusBadge({ status }: { status: string }) {
     FAILED: { bg: "rgba(239,68,68,0.1)", text: "#ef4444" },
     PAUSED: { bg: "rgba(107,114,128,0.1)", text: "#6b7280" },
     CANCELLED: { bg: "rgba(107,114,128,0.1)", text: "#6b7280" },
-    running: { bg: "rgba(16,185,129,0.1)", text: "#10b981" },
-    exited: { bg: "rgba(239,68,68,0.1)", text: "#ef4444" },
-    created: { bg: "rgba(245,158,11,0.1)", text: "#f59e0b" },
   };
   const c = colors[status] || { bg: "rgba(107,114,128,0.1)", text: "#6b7280" };
   return (
@@ -79,62 +46,8 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export default function AdminPage() {
-  const [stats, setStats] = useState<AdminStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [logType, setLogType] = useState<{service: "worker"|"router", type: "out"|"err"} | null>(null);
-  const [logs, setLogs] = useState<string>("Loading logs...");
-  const [isLive, setIsLive] = useState(true);
-  const [containerLogsModal, setContainerLogsModal] = useState<{id: string, name: string} | null>(null);
-  const [containerLogs, setContainerLogs] = useState<string>("Loading...");
-
-  const fetchContainerLogs = async (id: string) => {
-    setContainerLogs("Fetching from VM...");
-    try {
-      const res = await admin.getContainerLogs(id);
-      setContainerLogs(res.logs || "No logs");
-    } catch {
-      setContainerLogs("Failed to fetch logs");
-    }
-  };
-
-  useEffect(() => {
-    if (containerLogsModal) fetchContainerLogs(containerLogsModal.id);
-  }, [containerLogsModal]);
-
-  const fetchStats = async () => {
-    try {
-      setLoading(true);
-      const data = await admin.stats();
-      setStats(data as any);
-    } catch (err) {
-      console.error("Failed to load admin stats", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  // Auto-refresh every 15s
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const interval = setInterval(fetchStats, 15_000);
-    return () => clearInterval(interval);
-  }, [autoRefresh]);
-
-  useEffect(() => {
-    if (!logType || !isLive) return;
-    setLogs("Loading logs...");
-    admin.getLogs(logType.service, logType.type).then(data => setLogs(data.logs)).catch(() => setLogs("Failed to load logs"));
-    const interval = setInterval(() => {
-      admin.getLogs(logType.service, logType.type).then(data => setLogs(data.logs));
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [logType, isLive]);
+export default function AdminOverviewPage() {
+  const { stats, loading, fetchStats } = useAdminStats();
 
   const handleStop = async (id: string) => {
     try {
@@ -153,24 +66,6 @@ export default function AdminPage() {
     } catch { alert("Failed to delete"); }
   };
 
-  const handleKillContainer = async (id: string) => {
-    if (!confirm(`Force kill and remove container ${id}?`)) return;
-    try {
-      await admin.killContainer(id);
-      alert("Kill command sent");
-      fetchStats();
-    } catch { alert("Failed to kill container"); }
-  };
-
-  const handleFileDelete = async (path: string) => {
-    if (!confirm(`Are you sure you want to delete ${path}? This cannot be undone.`)) return;
-    try {
-      await admin.deleteFile(path);
-      alert("Delete command sent to worker");
-      fetchStats();
-    } catch { alert("Failed to delete file"); }
-  };
-
   const handleRestartService = async (service: "worker" | "router") => {
     if (!confirm(`Are you sure you want to restart the ${service}?`)) return;
     try {
@@ -187,24 +82,18 @@ export default function AdminPage() {
   const isWorkerOnline = vm && (Date.now() - vm.timestamp) < 60_000;
 
   return (
-    <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "2rem" }}>
-
+    <>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h1 className="page-title" style={{ margin: 0 }}>Admin</h1>
+          <h1 className="page-title" style={{ margin: 0 }}>Overview</h1>
           <p style={{ color: "var(--muted)", margin: "0.25rem 0 0 0" }}>
-            Whizan Cloud Services · worker health, containers, and the build queue
+            Whizan Cloud Services · Platform health and deployments
           </p>
         </div>
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.8125rem", color: "var(--muted)", cursor: "pointer" }}>
-            <input type="checkbox" checked={autoRefresh} onChange={() => setAutoRefresh(!autoRefresh)} style={{ accentColor: "var(--accent)" }} />
-            Auto-refresh
-          </label>
           <button onClick={fetchStats} className="btn btn-secondary">
-            <RefreshCw size={14} />
-            Refresh
+            <RefreshCw size={14} /> Refresh
           </button>
         </div>
       </div>
@@ -251,7 +140,7 @@ export default function AdminPage() {
         </div>
         <div className="card" style={{ padding: "1.25rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.75rem", color: "var(--muted)" }}>
-            <span style={{ fontSize: "0.8125rem", fontWeight: 500 }}>Queue</span>
+            <span style={{ fontSize: "0.8125rem", fontWeight: 500 }}>Build Queue</span>
             <Layers size={14} />
           </div>
           <div style={{ fontSize: "1.5rem", fontWeight: 700 }}>
@@ -295,78 +184,8 @@ export default function AdminPage() {
               {vm.memory.usedMB} MB / {vm.memory.totalMB} MB • {vm.memory.freeMB} MB free
             </div>
           </div>
-
-          {/* Disk */}
-          <div className="card" style={{ padding: "1.25rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <HardDrive size={16} color="var(--accent)" />
-                <span style={{ fontWeight: 600 }}>Disk</span>
-              </div>
-              <span style={{ fontSize: "1.25rem", fontWeight: 700 }}>{vm.disk?.usagePercent ?? 0}%</span>
-            </div>
-            <ProgressBar percent={vm.disk?.usagePercent ?? 0} color={(vm.disk?.usagePercent ?? 0) > 80 ? "#ef4444" : (vm.disk?.usagePercent ?? 0) > 50 ? "#f59e0b" : "#10b981"} />
-            <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: "0.5rem" }}>
-              {vm.disk?.usedMB ?? 0} MB / {vm.disk?.totalMB ?? 0} MB • {vm.disk?.freeMB ?? 0} MB free
-            </div>
-          </div>
         </div>
       )}
-
-      {/* Docker Containers */}
-      <div>
-        <h2 className="section-title" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <Container size={18} /> Docker Containers
-          {vm && <span style={{ fontSize: "0.8125rem", fontWeight: 400, color: "var(--muted)" }}>
-            ({vm.docker.runningContainers} running / {vm.docker.totalContainers} total)
-          </span>}
-        </h2>
-        <div className="card" style={{ overflow: "hidden" }}>
-          {!vm || vm.docker.containers.length === 0 ? (
-            <div style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>
-              {!vm ? "Worker offline — cannot fetch Docker stats" : "No Docker containers on the VM"}
-            </div>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8125rem" }}>
-                <thead>
-                  <tr style={{ borderBottom: "1px solid var(--card-border)" }}>
-                    {["ID", "Name", "Image", "State", "Status", "Ports", "Actions"].map(h => (
-                      <th key={h} style={{ padding: "0.75rem 1rem", textAlign: "left", color: "var(--muted)", fontWeight: 500, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {vm.docker.containers.map(c => {
-                    const d = stats?.allDeployments?.find((deploy: any) => deploy.id === c.deploymentId);
-                    return (
-                      <tr key={c.id} style={{ borderBottom: "1px solid var(--card-border)" }}>
-                        <td style={{ padding: "0.75rem 1rem", fontFamily: "monospace", fontSize: "0.75rem" }}>{c.id}</td>
-                        <td style={{ padding: "0.75rem 1rem", fontWeight: 500 }}>
-                          {c.name}
-                          {d && <span style={{ marginLeft: "0.5rem", fontSize: "0.6875rem", color: "var(--accent)", border: "1px solid var(--accent)", padding: "0.1rem 0.4rem", borderRadius: "4px" }}>{d.project.name}</span>}
-                        </td>
-                        <td style={{ padding: "0.75rem 1rem", color: "var(--muted)" }}>{c.image.slice(0, 30)}</td>
-                        <td style={{ padding: "0.75rem 1rem" }}><StatusBadge status={c.state} /></td>
-                        <td style={{ padding: "0.75rem 1rem", color: "var(--muted)" }}>{c.status}</td>
-                        <td style={{ padding: "0.75rem 1rem", fontFamily: "monospace", fontSize: "0.75rem" }}>{c.ports?.join(", ") || "—"}</td>
-                        <td style={{ padding: "0.75rem 1rem", display: "flex", gap: "0.5rem" }}>
-                          <button className="btn btn-secondary" style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }} onClick={() => setContainerLogsModal({ id: c.id, name: c.name })}>
-                            Logs
-                          </button>
-                          <button className="btn btn-danger" style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }} onClick={() => handleKillContainer(c.id)}>
-                            Kill
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* All Deployments */}
       <div>
@@ -422,115 +241,6 @@ export default function AdminPage() {
           )}
         </div>
       </div>
-
-      {/* Disk Files Management */}
-      {vm && vm.files && (
-        <div>
-          <h2 className="section-title" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <HardDrive size={18} /> Disk Files
-            <span style={{ fontSize: "0.8125rem", fontWeight: 400, color: "var(--muted)" }}>
-              ({vm.files.length} items found)
-            </span>
-          </h2>
-          <div className="card" style={{ overflow: "hidden" }}>
-            {vm.files.length === 0 ? (
-              <div style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>No build or log files found.</div>
-            ) : (
-              <div style={{ overflowX: "auto", maxHeight: "400px" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8125rem" }}>
-                  <thead>
-                    <tr style={{ borderBottom: "1px solid var(--card-border)", position: "sticky", top: 0, background: "var(--card-bg)" }}>
-                      <th style={{ padding: "0.75rem 1rem", textAlign: "left", color: "var(--muted)", fontWeight: 500, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Path</th>
-                      <th style={{ padding: "0.75rem 1rem", textAlign: "left", color: "var(--muted)", fontWeight: 500, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Type</th>
-                      <th style={{ padding: "0.75rem 1rem", textAlign: "left", color: "var(--muted)", fontWeight: 500, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Size (MB)</th>
-                      <th style={{ padding: "0.75rem 1rem", textAlign: "left", color: "var(--muted)", fontWeight: 500, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {vm.files.map((file, i) => (
-                      <tr key={i} style={{ borderBottom: "1px solid var(--card-border)" }}>
-                        <td style={{ padding: "0.75rem 1rem", fontFamily: "monospace", fontSize: "0.75rem" }}>{file.path}</td>
-                        <td style={{ padding: "0.75rem 1rem" }}>
-                          <span style={{ background: file.type === "build" ? "rgba(59,130,246,0.1)" : "rgba(245,158,11,0.1)", color: file.type === "build" ? "#3b82f6" : "#f59e0b", padding: "0.125rem 0.5rem", borderRadius: "100px", fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase" }}>
-                            {file.type}
-                          </span>
-                        </td>
-                        <td style={{ padding: "0.75rem 1rem", fontWeight: 500 }}>{file.sizeMB} MB</td>
-                        <td style={{ padding: "0.75rem 1rem" }}>
-                          <button className="btn btn-danger" style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }} onClick={() => handleFileDelete(file.path)}>
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Live Log Viewer */}
-      <div>
-        <h2 className="section-title" style={{ display: "flex", alignItems: "center", gap: "0.5rem", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <Terminal size={18} /> Live VM Logs
-            {logType && (
-              <button 
-                onClick={() => setIsLive(!isLive)} 
-                style={{ marginLeft: "1rem", fontSize: "0.75rem", padding: "0.2rem 0.5rem", borderRadius: "4px", background: isLive ? "#10b98122" : "var(--card)", color: isLive ? "#10b981" : "var(--muted)", border: `1px solid ${isLive ? "#10b981" : "var(--card-border)"}`, cursor: "pointer" }}
-              >
-                {isLive ? "Live: ON" : "Live: OFF"}
-              </button>
-            )}
-          </div>
-          <select className="input" style={{ padding: "0.25rem 0.5rem", fontSize: "0.8125rem", width: "auto" }} value={logType ? `${logType.service}:${logType.type}` : ""} onChange={(e) => {
-            if (!e.target.value) setLogType(null);
-            else {
-              const [s, t] = e.target.value.split(":");
-              setLogType({ service: s as "worker"|"router", type: t as "out"|"err" });
-            }
-          }}>
-            <option value="">Select log stream...</option>
-            <option value="worker:out">Worker (Stdout)</option>
-            <option value="worker:err">Worker (Errors)</option>
-            <option value="router:out">Edge Router (Stdout)</option>
-            <option value="router:err">Edge Router (Errors)</option>
-          </select>
-        </h2>
-        {logType ? (
-          <pre style={{ background: "#0a0a0a", color: "#10b981", padding: "1.25rem", borderRadius: "8px", height: "400px", overflowY: "auto", fontSize: "0.8125rem", fontFamily: "monospace", border: "1px solid rgba(255,255,255,0.1)", whiteSpace: "pre-wrap" }}>
-            {logs || "No logs available"}
-          </pre>
-        ) : (
-          <div className="card" style={{ padding: "3rem", textAlign: "center", color: "var(--muted)" }}>
-            Select a log stream from the dropdown above to view live PM2 logs from the Azure VM.
-          </div>
-        )}
-      </div>
-
-      {/* Container Logs Modal */}
-      {containerLogsModal && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
-          <div className="card" style={{ width: "100%", maxWidth: "900px", display: "flex", flexDirection: "column", maxHeight: "90vh" }}>
-            <div style={{ padding: "1rem 1.5rem", borderBottom: "1px solid var(--card-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <Terminal size={18} /> Logs: {containerLogsModal.name}
-              </h3>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button className="btn btn-secondary" style={{ padding: "0.25rem 0.75rem", fontSize: "0.8125rem" }} onClick={() => fetchContainerLogs(containerLogsModal.id)}>Refresh</button>
-                <button className="btn btn-secondary" style={{ padding: "0.25rem 0.75rem", fontSize: "0.8125rem" }} onClick={() => setContainerLogsModal(null)}>Close</button>
-              </div>
-            </div>
-            <div style={{ padding: "1rem", flex: 1, overflow: "hidden", display: "flex" }}>
-              <pre style={{ margin: 0, flex: 1, background: "#0a0a0a", color: "#e5e5e5", padding: "1rem", borderRadius: "4px", overflowY: "auto", fontSize: "0.8125rem", fontFamily: "monospace", border: "1px solid rgba(255,255,255,0.1)", whiteSpace: "pre-wrap" }}>
-                {containerLogs}
-              </pre>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    </>
   );
 }

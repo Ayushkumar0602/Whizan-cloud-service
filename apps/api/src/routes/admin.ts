@@ -155,4 +155,35 @@ export const adminRoutes = async function (fastify: FastifyInstance) {
     }
     return { success: true };
   });
+
+  // 8. Database Stats
+  fastify.get("/database/stats", async (request, reply) => {
+    let redisStats = null;
+    try {
+      const info = await redis.info();
+      const getVal = (key: string) => {
+        const match = info.match(new RegExp(`^${key}:(.*)`, "m"));
+        return match ? match[1].trim() : null;
+      };
+      redisStats = {
+        version: getVal("redis_version"),
+        uptime: getVal("uptime_in_days"),
+        connectedClients: getVal("connected_clients"),
+        usedMemory: getVal("used_memory_human"),
+        peakMemory: getVal("used_memory_peak_human"),
+      };
+    } catch {}
+
+    let pgStats = null;
+    try {
+      const dbSizeRes: any = await prisma.$queryRawUnsafe(`SELECT pg_size_pretty(pg_database_size(current_database())) as size`);
+      const connRes: any = await prisma.$queryRawUnsafe(`SELECT count(*) as connections FROM pg_stat_activity`);
+      pgStats = {
+        size: dbSizeRes?.[0]?.size || "Unknown",
+        connections: Number(connRes?.[0]?.connections || 0),
+      };
+    } catch {}
+
+    return { redis: redisStats, postgres: pgStats };
+  });
 }
