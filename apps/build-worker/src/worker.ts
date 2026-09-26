@@ -311,6 +311,8 @@ redisSub.on("message", async (channel, message) => {
         await fs.rm(path.join(BUILD_BASE_DIR, dId), { recursive: true, force: true }).catch(() => {});
         await redisPub.del(`build-logs:${dId}`);
         console.log(`[Admin] Cleaned up files for deployment ${dId}`);
+      }
+      
       if (payload.action === "DELETE_FILE") {
         const targetPath = payload.path;
         if (targetPath.startsWith("/opt/whizan-builds/") || targetPath.startsWith("/var/log/whizan/")) {
