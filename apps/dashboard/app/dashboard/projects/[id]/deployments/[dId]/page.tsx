@@ -265,6 +265,12 @@ export default function DeploymentPage() {
               );
             })
           )}
+          {streaming && isActive && logs.length > 0 && (
+            <div className="log-line">
+              <span className="log-num">{String(logs.length + 1).padStart(4, " ")}</span>
+              <span className="log-text" style={{ color: "var(--accent)" }}><span className="blinking-cursor">█</span> Processing...</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -275,10 +281,10 @@ export default function DeploymentPage() {
         .header-actions { display: flex; gap: 0.5rem; margin-left: auto; flex-wrap: wrap; }
         .error-banner {
           background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
-          border-radius: 10px; padding: 0.875rem 1.25rem; color: var(--danger);
+          border-radius: 6px; padding: 0.875rem 1.25rem; color: var(--danger);
           font-size: 0.875rem; margin-bottom: 1.25rem;
         }
-        .logs-panel { background: #070b10; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; }
+        .logs-panel { background: #000000; border: 1px solid var(--card-border); border-radius: 6px; overflow: hidden; box-shadow: var(--shadow); }
         .logs-toolbar {
           display: flex; align-items: center; justify-content: space-between;
           padding: 0.625rem 1rem; background: var(--card); border-bottom: 1px solid var(--card-border);
@@ -286,16 +292,18 @@ export default function DeploymentPage() {
         .logs-title { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; font-weight: 500; color: var(--muted); }
         .live-badge { font-size: 0.6875rem; color: var(--success); animation: pulse 2s ease-in-out infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+        .blinking-cursor { animation: blink 1s step-end infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
         .logs-count { font-size: 0.75rem; color: var(--muted); }
         .logs-body { height: 540px; overflow-y: auto; padding: 0.5rem 0; font-family: var(--font-geist-mono), Menlo, monospace; }
         .logs-waiting { display: flex; align-items: center; gap: 0.625rem; color: var(--muted); font-size: 0.8125rem; padding: 2rem 1.25rem; }
         .log-line { display: flex; font-size: 0.75rem; line-height: 1.65; }
-        .log-line:hover { background: rgba(255,255,255,0.025); }
-        .log-num { color: #2e3a4a; padding: 0 1rem; user-select: none; flex-shrink: 0; min-width: 4.5rem; text-align: right; white-space: pre; }
-        .log-text { color: #b8c4d0; word-break: break-word; flex: 1; padding-right: 1rem; }
-        .log-stderr .log-text { color: #f59e0b; }
-        .log-success .log-text { color: #22c55e; }
-        .log-error .log-text { color: #ef4444; }
+        .log-line:hover { background: rgba(255,255,255,0.05); }
+        .log-num { color: #334155; padding: 0 1rem; user-select: none; flex-shrink: 0; min-width: 4.5rem; text-align: right; white-space: pre; }
+        .log-text { color: #e2e8f0; word-break: break-word; flex: 1; padding-right: 1rem; }
+        .log-stderr .log-text { color: #fbbf24; }
+        .log-success .log-text { color: #4ade80; }
+        .log-error .log-text { color: #f87171; }
       `}</style>
     </div>
   );

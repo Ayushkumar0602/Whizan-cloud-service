@@ -98,6 +98,12 @@ export default function ProjectPage() {
             <span className="meta-item"><GitBranch size={13} />{project.branch}</span>
             <span className="meta-item"><Zap size={13} />{project.framework.toLowerCase()}</span>
             {latestDeploy && <StatusBadge status={latestDeploy.status} />}
+            {latestDeploy?.status === "READY" && latestDeploy?.deploymentType !== "STATIC" && (
+              <span className="meta-item" style={{ marginLeft: "0.5rem", fontWeight: 500, color: latestDeploy.containerPort ? "var(--success)" : "var(--muted)" }}>
+                <span className={`status-dot ${latestDeploy.containerPort ? "status-active" : "status-idle"}`} />
+                {latestDeploy.containerPort ? "Active (Running)" : "Asleep (Scaled to zero)"}
+              </span>
+            )}
           </div>
         </div>
         <div className="proj-actions">
@@ -263,6 +269,18 @@ export default function ProjectPage() {
         .deploy-type {
           font-size: 0.6875rem; padding: 0.15rem 0.5rem; border-radius: 4px;
           background: rgba(255,255,255,0.05); color: var(--muted); border: 1px solid var(--card-border);
+        }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+        .status-active { background: var(--success); box-shadow: 0 0 8px var(--success); animation: pulse 2s infinite; }
+        .status-idle { background: var(--muted); }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+
+        @media (max-width: 768px) {
+          .proj-header { flex-direction: column; align-items: stretch; }
+          .proj-actions { margin-left: 0; width: 100%; justify-content: stretch; }
+          .proj-actions .btn { flex: 1; justify-content: center; }
+          .deploy-row { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+          .deploy-row-right { width: 100%; justify-content: space-between; }
         }
       `}</style>
     </div>
