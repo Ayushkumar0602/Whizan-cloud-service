@@ -1,7 +1,7 @@
 "use client";
 import { useAuth } from "@/lib/auth";
 import { useRouter, usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BrandMark } from "@/components/brand";
 import {
@@ -10,7 +10,9 @@ import {
   Settings,
   LogOut,
   ShieldAlert,
-  Layers
+  Layers,
+  Moon,
+  Sun
 } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -18,9 +20,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
 
+  const [theme, setTheme] = useState("dark");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved === "light") {
+      setTheme("light");
+      document.documentElement.setAttribute("data-theme", "light");
+    } else {
+      setTheme("dark");
+      document.documentElement.setAttribute("data-theme", "dark");
+    }
+  }, []);
+
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
   }, [user, loading, router]);
+
+  function toggleTheme() {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("theme", next);
+  }
 
   if (loading || !user) {
     return (
@@ -76,9 +98,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <div className="user-email">{user.email}</div>
             </div>
           </div>
-          <button onClick={handleLogout} className="logout-btn" id="logout-btn" title="Sign out">
-            <LogOut size={15} />
-          </button>
+          <div style={{ display: "flex", gap: "0.2rem" }}>
+            <button onClick={toggleTheme} className="icon-btn" title="Toggle theme">
+              {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+            <button onClick={handleLogout} className="icon-btn" id="logout-btn" title="Sign out" style={{ color: "var(--danger)" }}>
+              <LogOut size={15} />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -87,9 +114,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <style>{`
         .dash-shell { display: flex; min-height: 100vh; background: var(--background); }
         .sidebar {
-          width: 248px;
+          width: 240px;
           min-height: 100vh;
-          background: #0c1118;
+          background: var(--card);
           border-right: 1px solid var(--card-border);
           display: flex;
           flex-direction: column;
@@ -106,11 +133,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
         .sidebar-nav { display: flex; flex-direction: column; gap: 0.2rem; }
         .nav-item {
-          display: flex; align-items: center; gap: 0.625rem;
-          padding: 0.55rem 0.75rem; border-radius: 10px;
-          font-size: 0.875rem; color: var(--muted); text-decoration: none;
+          display: flex; align-items: center; gap: 0.5rem;
+          padding: 0.5rem 0.65rem; border-radius: 4px;
+          font-size: 0.8125rem; font-weight: 500; color: var(--muted); text-decoration: none;
         }
-        .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--foreground); }
+        .nav-item:hover { background: var(--card-hover); color: var(--foreground); }
         .nav-item-active {
           background: var(--accent-glow); color: var(--accent); font-weight: 600;
         }
@@ -152,11 +179,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
         .user-name { font-size: 0.8125rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .user-email { font-size: 0.6875rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .logout-btn {
-          background: none; border: none; cursor: pointer; color: var(--muted);
-          padding: 0.375rem; border-radius: 6px; display: flex;
+        .icon-btn {
+          background: transparent; border: none; cursor: pointer; color: var(--muted);
+          padding: 0.35rem; border-radius: 4px; display: flex; transition: all 0.1s;
         }
-        .logout-btn:hover { color: var(--danger); background: rgba(239,68,68,0.1); }
+        .icon-btn:hover { background: var(--card-hover); color: var(--foreground); }
         .dash-main { flex: 1; overflow: auto; }
         @media (max-width: 720px) {
           .dash-shell { flex-direction: column; }
