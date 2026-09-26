@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { admin } from "@/lib/api";
 import {
   Activity, Database, Server, Trash2, PowerOff, RefreshCw,
-  Cpu, HardDrive, Container, Clock, Wifi, WifiOff, Layers
+  Cpu, HardDrive, Container, Clock, Wifi, WifiOff, Layers, Terminal
 } from "lucide-react";
 
 type VMStats = {
@@ -20,6 +20,7 @@ type VMStats = {
       id: string; name: string; image: string;
       state: string; status: string; created: number;
       ports: string[];
+      deploymentId?: string | null;
     }[];
     totalContainers: number;
     runningContainers: number;
@@ -82,6 +83,8 @@ export default function AdminPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [logType, setLogType] = useState<{service: "worker"|"router", type: "out"|"err"} | null>(null);
+  const [logs, setLogs] = useState<string>("Loading logs...");
 
   const fetchStats = async () => {
     try {
@@ -105,6 +108,16 @@ export default function AdminPage() {
     const interval = setInterval(fetchStats, 15_000);
     return () => clearInterval(interval);
   }, [autoRefresh]);
+
+  useEffect(() => {
+    if (!logType) return;
+    setLogs("Loading logs...");
+    admin.getLogs(logType.service, logType.type).then(data => setLogs(data.logs)).catch(() => setLogs("Failed to load logs"));
+    const interval = setInterval(() => {
+      admin.getLogs(logType.service, logType.type).then(data => setLogs(data.logs));
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [logType]);
 
   const handleStop = async (id: string) => {
     try {
@@ -141,6 +154,14 @@ export default function AdminPage() {
     } catch { alert("Failed to delete file"); }
   };
 
+  const handleRestartService = async (service: "worker" | "router") => {
+    if (!confirm(`Are you sure you want to restart the ${service}?`)) return;
+    try {
+      await admin.restartService(service);
+      alert(`${service} restart command sent to PM2`);
+    } catch { alert(`Failed to restart ${service}`); }
+  };
+
   if (loading && !stats) {
     return <div style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>Loading Azure metrics...</div>;
   }
@@ -172,13 +193,19 @@ export default function AdminPage() {
       </div>
 
       {/* Worker Status Banner */}
-      <div className="card" style={{ padding: "1rem 1.5rem", display: "flex", alignItems: "center", gap: "0.75rem", borderLeft: `3px solid ${isWorkerOnline ? "#10b981" : "#ef4444"}` }}>
-        {isWorkerOnline ? <Wifi size={18} color="#10b981" /> : <WifiOff size={18} color="#ef4444" />}
-        <div>
-          <span style={{ fontWeight: 600 }}>{isWorkerOnline ? "Worker Online" : "Worker Offline"}</span>
-          <span style={{ color: "var(--muted)", fontSize: "0.8125rem", marginLeft: "0.75rem" }}>
-            {vm ? `${vm.hostname} • ${vm.platform} • uptime ${formatUptime(vm.uptime)}` : "No stats received from Azure VM"}
-          </span>
+      <div className="card" style={{ padding: "1rem 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", borderLeft: `3px solid ${isWorkerOnline ? "#10b981" : "#ef4444"}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          {isWorkerOnline ? <Wifi size={18} color="#10b981" /> : <WifiOff size={18} color="#ef4444" />}
+          <div>
+            <span style={{ fontWeight: 600 }}>{isWorkerOnline ? "Worker Online" : "Worker Offline"}</span>
+            <span style={{ color: "var(--muted)", fontSize: "0.8125rem", marginLeft: "0.75rem" }}>
+              {vm ? `${vm.hostname} • ${vm.platform} • uptime ${formatUptime(vm.uptime)}` : "No stats received from Azure VM"}
+            </span>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <button className="btn btn-secondary" style={{ fontSize: "0.75rem", padding: "0.25rem 0.75rem" }} onClick={() => handleRestartService("worker")}>Restart Worker</button>
+          <button className="btn btn-secondary" style={{ fontSize: "0.75rem", padding: "0.25rem 0.75rem" }} onClick={() => handleRestartService("router")}>Restart Router</button>
         </div>
       </div>
 
@@ -293,21 +320,27 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {vm.docker.containers.map(c => (
-                    <tr key={c.id} style={{ borderBottom: "1px solid var(--card-border)" }}>
-                      <td style={{ padding: "0.75rem 1rem", fontFamily: "monospace", fontSize: "0.75rem" }}>{c.id}</td>
-                      <td style={{ padding: "0.75rem 1rem", fontWeight: 500 }}>{c.name}</td>
-                      <td style={{ padding: "0.75rem 1rem", color: "var(--muted)" }}>{c.image.slice(0, 30)}</td>
-                      <td style={{ padding: "0.75rem 1rem" }}><StatusBadge status={c.state} /></td>
-                      <td style={{ padding: "0.75rem 1rem", color: "var(--muted)" }}>{c.status}</td>
-                      <td style={{ padding: "0.75rem 1rem", fontFamily: "monospace", fontSize: "0.75rem" }}>{c.ports?.join(", ") || "—"}</td>
-                      <td style={{ padding: "0.75rem 1rem" }}>
-                        <button className="btn btn-danger" style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }} onClick={() => handleKillContainer(c.id)}>
-                          Kill
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {vm.docker.containers.map(c => {
+                    const d = stats?.allDeployments?.find((deploy: any) => deploy.id === c.deploymentId);
+                    return (
+                      <tr key={c.id} style={{ borderBottom: "1px solid var(--card-border)" }}>
+                        <td style={{ padding: "0.75rem 1rem", fontFamily: "monospace", fontSize: "0.75rem" }}>{c.id}</td>
+                        <td style={{ padding: "0.75rem 1rem", fontWeight: 500 }}>
+                          {c.name}
+                          {d && <span style={{ marginLeft: "0.5rem", fontSize: "0.6875rem", color: "var(--accent)", border: "1px solid var(--accent)", padding: "0.1rem 0.4rem", borderRadius: "4px" }}>{d.project.name}</span>}
+                        </td>
+                        <td style={{ padding: "0.75rem 1rem", color: "var(--muted)" }}>{c.image.slice(0, 30)}</td>
+                        <td style={{ padding: "0.75rem 1rem" }}><StatusBadge status={c.state} /></td>
+                        <td style={{ padding: "0.75rem 1rem", color: "var(--muted)" }}>{c.status}</td>
+                        <td style={{ padding: "0.75rem 1rem", fontFamily: "monospace", fontSize: "0.75rem" }}>{c.ports?.join(", ") || "—"}</td>
+                        <td style={{ padding: "0.75rem 1rem" }}>
+                          <button className="btn btn-danger" style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }} onClick={() => handleKillContainer(c.id)}>
+                            Kill
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -417,6 +450,37 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* Live Log Viewer */}
+      <div>
+        <h2 className="section-title" style={{ display: "flex", alignItems: "center", gap: "0.5rem", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <Terminal size={18} /> Live VM Logs
+          </div>
+          <select className="input" style={{ padding: "0.25rem 0.5rem", fontSize: "0.8125rem", width: "auto" }} value={logType ? `${logType.service}:${logType.type}` : ""} onChange={(e) => {
+            if (!e.target.value) setLogType(null);
+            else {
+              const [s, t] = e.target.value.split(":");
+              setLogType({ service: s as "worker"|"router", type: t as "out"|"err" });
+            }
+          }}>
+            <option value="">Select log stream...</option>
+            <option value="worker:out">Worker (Stdout)</option>
+            <option value="worker:err">Worker (Errors)</option>
+            <option value="router:out">Edge Router (Stdout)</option>
+            <option value="router:err">Edge Router (Errors)</option>
+          </select>
+        </h2>
+        {logType ? (
+          <pre style={{ background: "#0a0a0a", color: "#10b981", padding: "1.25rem", borderRadius: "8px", height: "400px", overflowY: "auto", fontSize: "0.8125rem", fontFamily: "monospace", border: "1px solid rgba(255,255,255,0.1)", whiteSpace: "pre-wrap" }}>
+            {logs || "No logs available"}
+          </pre>
+        ) : (
+          <div className="card" style={{ padding: "3rem", textAlign: "center", color: "var(--muted)" }}>
+            Select a log stream from the dropdown above to view live PM2 logs from the Azure VM.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

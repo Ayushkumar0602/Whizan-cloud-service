@@ -294,6 +294,20 @@ redisSub.on("message", async (channel, message) => {
         return;
       }
 
+      if (payload.action === "RESTART_WORKER") {
+        const { exec } = await import("child_process");
+        console.log("[Admin] Restarting worker via PM2...");
+        exec("pm2 restart whizan-worker", () => {});
+        return;
+      }
+
+      if (payload.action === "RESTART_ROUTER") {
+        const { exec } = await import("child_process");
+        console.log("[Admin] Restarting router via PM2...");
+        exec("pm2 restart whizan-router", () => {});
+        return;
+      }
+
       if (payload.action === "DELETE_FILE") {
         const targetPath = payload.path;
         if (targetPath.startsWith("/opt/whizan-builds/") || targetPath.startsWith("/var/log/whizan/")) {
@@ -409,7 +423,8 @@ const statsInterval = setInterval(async () => {
         state: c.State,
         status: c.Status,
         created: c.Created,
-        ports: c.Ports?.map((p) => `${p.PublicPort || "?"}:${p.PrivatePort}`).filter(Boolean),
+        ports: c.Ports?.map((p: any) => `${p.PublicPort || "?"}:${p.PrivatePort}`).filter(Boolean),
+        deploymentId: c.Mounts?.find((m: any) => m.Source?.includes("whizan-builds"))?.Source?.split("/")?.pop() || null,
       }));
     } catch {}
 
@@ -455,6 +470,25 @@ const statsInterval = setInterval(async () => {
           sizeMB: parseInt(size) || 0
         };
       }).sort((a, b) => b.sizeMB - a.sizeMB);
+    } catch {}
+
+    // Read tail of logs and store in redis
+    try {
+      const { exec } = await import("child_process");
+      const util = await import("util");
+      const execAsync = util.promisify(exec);
+      
+      const [workerOut, workerErr, routerOut, routerErr] = await Promise.all([
+        execAsync("tail -n 100 /var/log/whizan/worker-out.log 2>/dev/null || true").then(r => r.stdout).catch(() => ""),
+        execAsync("tail -n 100 /var/log/whizan/worker-error.log 2>/dev/null || true").then(r => r.stdout).catch(() => ""),
+        execAsync("tail -n 100 /var/log/whizan/router-out.log 2>/dev/null || true").then(r => r.stdout).catch(() => ""),
+        execAsync("tail -n 100 /var/log/whizan/router-error.log 2>/dev/null || true").then(r => r.stdout).catch(() => ""),
+      ]);
+
+      await redisPub.set("vm:logs:worker:out", workerOut, "EX", 60);
+      await redisPub.set("vm:logs:worker:err", workerErr, "EX", 60);
+      await redisPub.set("vm:logs:router:out", routerOut, "EX", 60);
+      await redisPub.set("vm:logs:router:err", routerErr, "EX", 60);
     } catch {}
 
     const stats = {

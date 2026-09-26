@@ -105,4 +105,22 @@ export const adminRoutes = async function (fastify: FastifyInstance) {
 
     return { success: true };
   });
+
+  // 6. Get logs
+  fastify.get("/logs/:service/:type", async (request, reply) => {
+    const { service, type } = request.params as { service: string, type: string };
+    const logs = await redis.get(`vm:logs:${service}:${type}`);
+    return { logs: logs || "No logs available" };
+  });
+
+  // 7. Restart services
+  fastify.post("/restart/:service", async (request, reply) => {
+    const { service } = request.params as { service: string };
+    if (service === "worker") {
+      await redis.publish("admin:commands", JSON.stringify({ action: "RESTART_WORKER" }));
+    } else if (service === "router") {
+      await redis.publish("admin:commands", JSON.stringify({ action: "RESTART_ROUTER" }));
+    }
+    return { success: true };
+  });
 }
