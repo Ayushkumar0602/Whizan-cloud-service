@@ -39,18 +39,18 @@ export default function ConsolePage() {
       <div className="stats-row" style={{ marginBottom: "2rem" }}>
         <div className="stat-card">
           <div className="stat-label"><Activity size={14} /> Total Bandwidth</div>
-          <div className="stat-value">124.5 GB</div>
-          <div className="stat-sub">+14% from last month</div>
+          <div className="stat-value">0 GB</div>
+          <div className="stat-sub" style={{ color: "var(--muted)" }}>Collecting data...</div>
         </div>
         <div className="stat-card">
           <div className="stat-label"><GitPullRequest size={14} /> Deployments</div>
           <div className="stat-value">{list.reduce((acc, p) => acc + p.deployments.length, 0)}</div>
-          <div className="stat-sub">Across {list.length} projects</div>
+          <div className="stat-sub" style={{ color: "var(--muted)" }}>Across {list.length} projects</div>
         </div>
         <div className="stat-card">
           <div className="stat-label"><Cpu size={14} /> Active Edge Nodes</div>
-          <div className="stat-value">3 Regions</div>
-          <div className="stat-sub">Routing 100% traffic</div>
+          <div className="stat-value">1 Node</div>
+          <div className="stat-sub" style={{ color: "var(--muted)" }}>Routing 100% traffic</div>
         </div>
       </div>
 
