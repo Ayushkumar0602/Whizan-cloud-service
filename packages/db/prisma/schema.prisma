@@ -69,6 +69,7 @@ model Project {
   deployments    Deployment[]
   envVariables   EnvVariable[]
   customDomains  CustomDomain[]
+  analytics      ProjectAnalytics[]
 
   @@map("projects")
 }
@@ -158,3 +159,21 @@ model CustomDomain {
 
   @@map("custom_domains")
 }
+
+// ─────────────────────────────────────────
+//  PROJECT ANALYTICS (Aggregated daily)
+// ─────────────────────────────────────────
+model ProjectAnalytics {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  date      DateTime @db.Date  // e.g. 2026-09-26
+  pageViews Int      @default(0) @map("page_views")
+  visitors  Int      @default(0)
+  bandwidth Int      @default(0) // in bytes
+  
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, date])
+  @@map("project_analytics")
+}
+

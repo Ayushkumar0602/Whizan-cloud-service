@@ -5,6 +5,7 @@ interface DeploymentInfo {
   staticDir?: string;
   containerPort?: number;
   deploymentId: string;
+  projectId: string;
 }
 
 /**

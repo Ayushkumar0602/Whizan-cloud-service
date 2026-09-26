@@ -58,6 +58,25 @@ export async function projectRoutes(fastify: FastifyInstance) {
     return project;
   });
 
+  // GET /api/projects/:id/analytics
+  fastify.get("/:id/analytics", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { userId } = request.user;
+    const project = await prisma.project.findFirst({ where: { id, userId } });
+    if (!project) return reply.code(404).send({ error: "Project not found" });
+
+    // Fetch the last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const analytics = await prisma.projectAnalytics.findMany({
+      where: { projectId: id, date: { gte: thirtyDaysAgo } },
+      orderBy: { date: "asc" }
+    });
+
+    return analytics;
+  });
+
   // PATCH /api/projects/:id
   fastify.patch("/:id", async (request, reply) => {
     const { id } = request.params as { id: string };

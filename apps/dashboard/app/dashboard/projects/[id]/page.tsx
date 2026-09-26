@@ -112,6 +112,9 @@ export default function ProjectPage() {
               <Globe size={15} /> Visit site <ExternalLink size={13} />
             </a>
           )}
+          <Link href={`/dashboard/projects/${id}/analytics`} className="btn btn-secondary">
+            <Globe size={15} /> Analytics
+          </Link>
           <Link href={`/dashboard/projects/${id}/settings`} className="btn btn-secondary">
             <Settings2 size={15} /> Settings
           </Link>

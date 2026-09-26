@@ -128,7 +128,19 @@ const server = http.createServer(async (req, res) => {
   // ── STATIC: Serve files directly from disk ─────────────────────────────────
   if (type === "static" && staticDir) {
     const serve = getStaticServer(staticDir);
+    const startBytes = res.socket?.bytesWritten || 0;
     serve(req as any, res as any, finalhandler(req, res) as any);
+    res.on("finish", () => {
+      const bytesSent = (res.socket?.bytesWritten || 0) - startBytes;
+      const event = {
+        projectId: (deployment as any).projectId,
+        date: new Date().toISOString().split("T")[0],
+        path: req.url || "/",
+        bytesSent,
+        ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "0.0.0.0",
+      };
+      redis.lpush("analytics:buffer", JSON.stringify(event)).catch(() => {});
+    });
     return;
   }
 
@@ -173,6 +185,7 @@ const server = http.createServer(async (req, res) => {
   if (type === "ssr") {
     if (containerPort) {
       proxy.web(req, res, { target: `http://127.0.0.1:${containerPort}` });
+      // The proxy handles the response, so we track analytics in proxy.on('proxyRes')
       return;
     } else {
       // Scale-to-zero wakeup
@@ -183,6 +196,37 @@ const server = http.createServer(async (req, res) => {
 
   res.writeHead(503);
   res.end("Service Unavailable");
+});
+
+// ── Analytics Tracking ────────────────────────────────────────────────────────
+proxy.on("proxyRes", (proxyRes, req, res) => {
+  const host = req.headers.host || "";
+  let slug = "";
+  if (host.endsWith(`.${BASE_DOMAIN}`) || host.endsWith(`.${BASE_DOMAIN}:${ROUTER_PORT}`)) {
+    slug = host.split(".")[0];
+  } else {
+    slug = host.replace(/:.*$/, "");
+  }
+
+  // Count bytes written
+  let bytesSent = 0;
+  proxyRes.on("data", (chunk) => { bytesSent += chunk.length; });
+
+  proxyRes.on("end", () => {
+    redis.get(`deployment:${slug}`).then(raw => {
+      if (raw) {
+        const dep = JSON.parse(raw);
+        const event = {
+          projectId: dep.projectId,
+          date: new Date().toISOString().split("T")[0],
+          path: req.url || "/",
+          bytesSent,
+          ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "0.0.0.0",
+        };
+        redis.lpush("analytics:buffer", JSON.stringify(event)).catch(() => {});
+      }
+    }).catch(() => {});
+  });
 });
 
 async function handleWakeupAndProxy(deployment: DeploymentInfo, req: http.IncomingMessage, res: http.ServerResponse, slug: string) {

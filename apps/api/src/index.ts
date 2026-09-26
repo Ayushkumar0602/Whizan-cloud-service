@@ -13,6 +13,9 @@ import { webhookRoutes } from "./routes/webhooks.js";
 import { adminRoutes } from "./routes/admin.js";
 import { redisClient } from "./lib/redis.js";
 import { prisma } from "./lib/prisma.js";
+import { startAnalyticsProcessor } from "./lib/analytics-processor.js";
+
+startAnalyticsProcessor();
 
 const app = Fastify({
   logger: {

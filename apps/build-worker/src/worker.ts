@@ -153,6 +153,7 @@ const worker = new Worker<BuildJob>(
         staticDir: analysis.staticDir ? path.join(buildDir, analysis.staticDir) : undefined,
         containerPort,
         deploymentId,
+        projectId,
       });
 
       // ── 8. Mark READY ────────────────────────────────────────────────────

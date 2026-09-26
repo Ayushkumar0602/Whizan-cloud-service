@@ -96,6 +96,7 @@ export const projects = {
   list: () => request<ProjectWithLatestDeploy[]>("/api/projects"),
 
   get: (id: string) => request<ProjectWithDeployments>(`/api/projects/${id}`),
+  getAnalytics: (id: string) => request<any[]>(`/api/projects/${id}/analytics`),
 
   create: (data: CreateProjectData) =>
     request<Project>("/api/projects", { method: "POST", body: JSON.stringify(data) }),
