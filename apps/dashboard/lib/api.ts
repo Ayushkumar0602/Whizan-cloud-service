@@ -246,4 +246,5 @@ export const admin = {
   stopContainer: (deploymentId: string) => request(`/api/admin/deployments/${deploymentId}/stop`, { method: "POST" }),
   deleteDeployment: (deploymentId: string) => request(`/api/admin/deployments/${deploymentId}`, { method: "DELETE" }),
   killContainer: (containerId: string) => request(`/api/admin/containers/${containerId}`, { method: "DELETE" }),
+  deleteFile: (path: string) => request(`/api/admin/files/delete`, { method: "POST", body: JSON.stringify({ path }) }),
 };

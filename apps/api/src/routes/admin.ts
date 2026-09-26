@@ -91,4 +91,18 @@ export const adminRoutes = async function (fastify: FastifyInstance) {
 
     return { success: true };
   });
+
+  // 5. Delete specific file/directory on VM
+  fastify.post("/files/delete", async (request, reply) => {
+    const { path } = request.body as { path: string };
+    
+    if (!path) return reply.code(400).send({ error: "Path required" });
+
+    await redis.publish("admin:commands", JSON.stringify({
+      action: "DELETE_FILE",
+      path
+    }));
+
+    return { success: true };
+  });
 }

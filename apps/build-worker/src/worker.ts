@@ -311,6 +311,13 @@ redisSub.on("message", async (channel, message) => {
         await fs.rm(path.join(BUILD_BASE_DIR, dId), { recursive: true, force: true }).catch(() => {});
         await redisPub.del(`build-logs:${dId}`);
         console.log(`[Admin] Cleaned up files for deployment ${dId}`);
+      if (payload.action === "DELETE_FILE") {
+        const targetPath = payload.path;
+        if (targetPath.startsWith("/opt/whizan-builds/") || targetPath.startsWith("/var/log/whizan/")) {
+          console.log(`[Admin] Deleting file/directory: ${targetPath}`);
+          await fs.rm(targetPath, { recursive: true, force: true }).catch(() => {});
+        }
+        return;
       }
     } catch (err) {
       console.error("[Admin] Error executing command:", err);
@@ -428,6 +435,24 @@ const statsInterval = setInterval(async () => {
       };
     } catch {}
 
+    // Disk files (Builds and Logs)
+    let diskFiles: { path: string; type: string; sizeMB: number }[] = [];
+    try {
+      const { exec } = await import("child_process");
+      const util = await import("util");
+      const execAsync = util.promisify(exec);
+      
+      const { stdout } = await execAsync("du -sm /opt/whizan-builds/* /var/log/whizan/* 2>/dev/null || true");
+      diskFiles = stdout.trim().split("\n").filter(Boolean).map((line) => {
+        const [size, filePath] = line.split(/\s+/);
+        return {
+          path: filePath,
+          type: filePath.startsWith("/opt/whizan-builds") ? "build" : "log",
+          sizeMB: parseInt(size) || 0
+        };
+      }).sort((a, b) => b.sizeMB - a.sizeMB);
+    } catch {}
+
     const stats = {
       timestamp: Date.now(),
       hostname: os.hostname(),
@@ -451,6 +476,7 @@ const statsInterval = setInterval(async () => {
         runningContainers: dockerContainers.filter((c) => c.state === "running").length,
       },
       queue: queueStats,
+      files: diskFiles,
     };
 
     await redisPub.set("vm:stats", JSON.stringify(stats), "EX", 60);
