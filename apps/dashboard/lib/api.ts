@@ -248,5 +248,6 @@ export const admin = {
   killContainer: (containerId: string) => request(`/api/admin/containers/${containerId}`, { method: "DELETE" }),
   deleteFile: (path: string) => request(`/api/admin/files/delete`, { method: "POST", body: JSON.stringify({ path }) }),
   getLogs: (service: string, type: string) => request<{logs: string}>(`/api/admin/logs/${service}/${type}`),
+  getContainerLogs: (containerId: string) => request<{logs: string}>(`/api/admin/containers/${containerId}/logs`),
   restartService: (service: string) => request(`/api/admin/restart/${service}`, { method: "POST" }),
 };

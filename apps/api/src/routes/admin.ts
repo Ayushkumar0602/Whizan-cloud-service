@@ -92,6 +92,38 @@ export const adminRoutes = async function (fastify: FastifyInstance) {
     return { success: true };
   });
 
+  // 4b. Fetch logs from a specific container (RPC)
+  fastify.get("/containers/:id/logs", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const replyChannel = `admin:rpc:logs:${id}:${Date.now()}`;
+    
+    return new Promise((resolve) => {
+      let timeout = setTimeout(() => {
+        sub.unsubscribe(replyChannel).catch(() => {});
+        sub.quit().catch(() => {});
+        resolve({ logs: "Timeout waiting for VM worker. Is it online?" });
+      }, 5000);
+
+      const sub = redis.duplicate();
+      sub.subscribe(replyChannel, () => {
+        redis.publish("admin:commands", JSON.stringify({
+          action: "GET_CONTAINER_LOGS",
+          containerId: id,
+          replyTo: replyChannel
+        }));
+      });
+
+      sub.on("message", (channel, message) => {
+        if (channel === replyChannel) {
+          clearTimeout(timeout);
+          sub.unsubscribe(replyChannel).catch(() => {});
+          sub.quit().catch(() => {});
+          resolve({ logs: message });
+        }
+      });
+    });
+  });
+
   // 5. Delete specific file/directory on VM
   fastify.post("/files/delete", async (request, reply) => {
     const { path } = request.body as { path: string };

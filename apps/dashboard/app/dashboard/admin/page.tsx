@@ -85,6 +85,23 @@ export default function AdminPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [logType, setLogType] = useState<{service: "worker"|"router", type: "out"|"err"} | null>(null);
   const [logs, setLogs] = useState<string>("Loading logs...");
+  const [isLive, setIsLive] = useState(true);
+  const [containerLogsModal, setContainerLogsModal] = useState<{id: string, name: string} | null>(null);
+  const [containerLogs, setContainerLogs] = useState<string>("Loading...");
+
+  const fetchContainerLogs = async (id: string) => {
+    setContainerLogs("Fetching from VM...");
+    try {
+      const res = await admin.getContainerLogs(id);
+      setContainerLogs(res.logs || "No logs");
+    } catch {
+      setContainerLogs("Failed to fetch logs");
+    }
+  };
+
+  useEffect(() => {
+    if (containerLogsModal) fetchContainerLogs(containerLogsModal.id);
+  }, [containerLogsModal]);
 
   const fetchStats = async () => {
     try {
@@ -110,14 +127,14 @@ export default function AdminPage() {
   }, [autoRefresh]);
 
   useEffect(() => {
-    if (!logType) return;
+    if (!logType || !isLive) return;
     setLogs("Loading logs...");
     admin.getLogs(logType.service, logType.type).then(data => setLogs(data.logs)).catch(() => setLogs("Failed to load logs"));
     const interval = setInterval(() => {
       admin.getLogs(logType.service, logType.type).then(data => setLogs(data.logs));
-    }, 5000);
+    }, 2000);
     return () => clearInterval(interval);
-  }, [logType]);
+  }, [logType, isLive]);
 
   const handleStop = async (id: string) => {
     try {
@@ -333,7 +350,10 @@ export default function AdminPage() {
                         <td style={{ padding: "0.75rem 1rem" }}><StatusBadge status={c.state} /></td>
                         <td style={{ padding: "0.75rem 1rem", color: "var(--muted)" }}>{c.status}</td>
                         <td style={{ padding: "0.75rem 1rem", fontFamily: "monospace", fontSize: "0.75rem" }}>{c.ports?.join(", ") || "—"}</td>
-                        <td style={{ padding: "0.75rem 1rem" }}>
+                        <td style={{ padding: "0.75rem 1rem", display: "flex", gap: "0.5rem" }}>
+                          <button className="btn btn-secondary" style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }} onClick={() => setContainerLogsModal({ id: c.id, name: c.name })}>
+                            Logs
+                          </button>
                           <button className="btn btn-danger" style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }} onClick={() => handleKillContainer(c.id)}>
                             Kill
                           </button>
@@ -456,6 +476,14 @@ export default function AdminPage() {
         <h2 className="section-title" style={{ display: "flex", alignItems: "center", gap: "0.5rem", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <Terminal size={18} /> Live VM Logs
+            {logType && (
+              <button 
+                onClick={() => setIsLive(!isLive)} 
+                style={{ marginLeft: "1rem", fontSize: "0.75rem", padding: "0.2rem 0.5rem", borderRadius: "4px", background: isLive ? "#10b98122" : "var(--card)", color: isLive ? "#10b981" : "var(--muted)", border: `1px solid ${isLive ? "#10b981" : "var(--card-border)"}`, cursor: "pointer" }}
+              >
+                {isLive ? "Live: ON" : "Live: OFF"}
+              </button>
+            )}
           </div>
           <select className="input" style={{ padding: "0.25rem 0.5rem", fontSize: "0.8125rem", width: "auto" }} value={logType ? `${logType.service}:${logType.type}` : ""} onChange={(e) => {
             if (!e.target.value) setLogType(null);
@@ -481,6 +509,28 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
+      {/* Container Logs Modal */}
+      {containerLogsModal && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
+          <div className="card" style={{ width: "100%", maxWidth: "900px", display: "flex", flexDirection: "column", maxHeight: "90vh" }}>
+            <div style={{ padding: "1rem 1.5rem", borderBottom: "1px solid var(--card-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Terminal size={18} /> Logs: {containerLogsModal.name}
+              </h3>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button className="btn btn-secondary" style={{ padding: "0.25rem 0.75rem", fontSize: "0.8125rem" }} onClick={() => fetchContainerLogs(containerLogsModal.id)}>Refresh</button>
+                <button className="btn btn-secondary" style={{ padding: "0.25rem 0.75rem", fontSize: "0.8125rem" }} onClick={() => setContainerLogsModal(null)}>Close</button>
+              </div>
+            </div>
+            <div style={{ padding: "1rem", flex: 1, overflow: "hidden", display: "flex" }}>
+              <pre style={{ margin: 0, flex: 1, background: "#0a0a0a", color: "#e5e5e5", padding: "1rem", borderRadius: "4px", overflowY: "auto", fontSize: "0.8125rem", fontFamily: "monospace", border: "1px solid rgba(255,255,255,0.1)", whiteSpace: "pre-wrap" }}>
+                {containerLogs}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

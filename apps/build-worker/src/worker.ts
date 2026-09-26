@@ -301,6 +301,20 @@ redisSub.on("message", async (channel, message) => {
         return;
       }
 
+      if (payload.action === "GET_CONTAINER_LOGS") {
+        const { exec } = await import("child_process");
+        const util = await import("util");
+        const execAsync = util.promisify(exec);
+        try {
+          const { stdout, stderr } = await execAsync(`docker logs --tail 200 ${payload.containerId}`);
+          const logs = [stdout, stderr].filter(Boolean).join("\n").trim();
+          await redisPub.publish(payload.replyTo, logs || "Container has no logs yet.");
+        } catch (err: any) {
+          await redisPub.publish(payload.replyTo, `Failed to fetch logs: ${err.message}`);
+        }
+        return;
+      }
+
       if (payload.action === "RESTART_ROUTER") {
         const { exec } = await import("child_process");
         console.log("[Admin] Restarting router via PM2...");
