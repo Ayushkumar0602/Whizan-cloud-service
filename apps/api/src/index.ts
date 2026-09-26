@@ -17,6 +17,25 @@ import { startAnalyticsProcessor } from "./lib/analytics-processor.js";
 
 startAnalyticsProcessor();
 
+// ─── Startup Cleanup Routine ──────────────────────────────────────────────────
+// If the VM crashes or reboots while a deployment is BUILDING or QUEUED, it will
+// be stuck in that state forever. This resets them to FAILED so they can be redeployed.
+try {
+  const result = await prisma.deployment.updateMany({
+    where: { status: { in: ["BUILDING", "QUEUED"] } },
+    data: {
+      status: "FAILED",
+      errorMessage: "Build interrupted by system reboot or crash.",
+      buildFinishedAt: new Date(),
+    },
+  });
+  if (result.count > 0) {
+    console.log(`[System] Reset ${result.count} stuck deployment(s) to FAILED.`);
+  }
+} catch (err) {
+  console.error("[System] Failed to run startup cleanup routine:", err);
+}
+
 const app = Fastify({
   logger: {
     transport: {
