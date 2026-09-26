@@ -37,11 +37,14 @@ export async function projectRoutes(fastify: FastifyInstance) {
     if (!body.success) return reply.code(400).send({ error: body.error.flatten() });
 
     const { userId } = request.user;
-    const slugTaken = await prisma.project.findUnique({ where: { slug: body.data.slug } });
-    if (slugTaken) return reply.code(409).send({ error: "Slug already taken" });
+    let finalSlug = body.data.slug;
+    let slugTaken = await prisma.project.findUnique({ where: { slug: finalSlug } });
+    if (slugTaken) {
+      finalSlug = `${finalSlug}-${Math.random().toString(36).substring(2, 7)}`;
+    }
 
     const project = await prisma.project.create({
-      data: { ...body.data, userId, webhookSecret: generateWebhookSecret() },
+      data: { ...body.data, slug: finalSlug, userId, webhookSecret: generateWebhookSecret() },
     });
     return reply.code(201).send(project);
   });
