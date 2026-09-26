@@ -479,10 +479,10 @@ const statsInterval = setInterval(async () => {
       const execAsync = util.promisify(exec);
       
       const [workerOut, workerErr, routerOut, routerErr] = await Promise.all([
-        execAsync("tail -n 100 /var/log/whizan/worker-out.log 2>/dev/null || true").then(r => r.stdout).catch(() => ""),
-        execAsync("tail -n 100 /var/log/whizan/worker-error.log 2>/dev/null || true").then(r => r.stdout).catch(() => ""),
-        execAsync("tail -n 100 /var/log/whizan/router-out.log 2>/dev/null || true").then(r => r.stdout).catch(() => ""),
-        execAsync("tail -n 100 /var/log/whizan/router-error.log 2>/dev/null || true").then(r => r.stdout).catch(() => ""),
+        execAsync("cat /var/log/whizan/worker-out*.log 2>/dev/null | tail -n 100 || true").then(r => r.stdout).catch(() => ""),
+        execAsync("cat /var/log/whizan/worker-error*.log 2>/dev/null | tail -n 100 || true").then(r => r.stdout).catch(() => ""),
+        execAsync("cat /var/log/whizan/router-out*.log 2>/dev/null | tail -n 100 || true").then(r => r.stdout).catch(() => ""),
+        execAsync("cat /var/log/whizan/router-error*.log 2>/dev/null | tail -n 100 || true").then(r => r.stdout).catch(() => ""),
       ]);
 
       await redisPub.set("vm:logs:worker:out", workerOut, "EX", 60);
