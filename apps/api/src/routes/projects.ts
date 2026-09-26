@@ -40,7 +40,11 @@ export async function projectRoutes(fastify: FastifyInstance) {
     let finalSlug = body.data.slug;
     let slugTaken = await prisma.project.findUnique({ where: { slug: finalSlug } });
     if (slugTaken) {
-      finalSlug = `${finalSlug}-${Math.random().toString(36).substring(2, 7)}`;
+      finalSlug = `${finalSlug}-${userId.replace(/-/g, '').substring(0, 5)}`;
+      let secondCheck = await prisma.project.findUnique({ where: { slug: finalSlug } });
+      if (secondCheck) {
+        finalSlug = `${finalSlug}-${Math.random().toString(36).substring(2, 6)}`;
+      }
     }
 
     const project = await prisma.project.create({

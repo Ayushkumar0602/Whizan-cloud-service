@@ -178,7 +178,7 @@ export default function ProjectPage() {
         </div>
         <div className="stat-card">
           <div className="stat-label">Deploy URL</div>
-          <div className="stat-value mono">{latestDeploy?.url?.replace('http://', '') || `${project.slug}.whizan.app`}</div>
+          <div className="stat-value mono">{latestDeploy?.url?.replace('http://', '') || `${project.slug}.20.2.136.11.nip.io`}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Deployments</div>

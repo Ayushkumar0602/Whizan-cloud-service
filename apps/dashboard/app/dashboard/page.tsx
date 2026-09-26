@@ -82,7 +82,7 @@ export default function ConsolePage() {
                   <Link key={p.id} href={`/dashboard/projects/${p.id}`} className="recent-row">
                     <div>
                       <div className="recent-name">{p.name}</div>
-                      <div className="mono" style={{ color: "var(--muted)", fontSize: "0.75rem", marginTop: "2px" }}>{p.slug}.whizan.cloud</div>
+                      <div className="mono" style={{ color: "var(--muted)", fontSize: "0.75rem", marginTop: "2px" }}>{p.slug}.20.2.136.11.nip.io</div>
                     </div>
                     {latest ? <StatusBadge status={latest.status} /> : <span className="badge badge-queued">No deploys</span>}
                     <span className="recent-when">
